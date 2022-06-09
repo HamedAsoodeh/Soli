@@ -40,6 +40,11 @@ func NewBasicFuncTestSuite(cfg cosmosnet.Config) *BasicFuncTestSuite {
 
 func (s *BasicFuncTestSuite) SetupSuite() {
 	s.T().Log("setting up integration test suite")
+	cfg := sdk.GetConfig()
+	cfg.SetBech32PrefixForAccount(app.Bech32PrefixAccAddr, app.Bech32PrefixAccPub)
+	cfg.SetBech32PrefixForValidator(app.Bech32PrefixValAddr, app.Bech32PrefixValPub)
+	cfg.SetBech32PrefixForConsensusNode(app.Bech32PrefixConsAddr, app.Bech32PrefixConsPub)
+	cfg.Seal()
 
 	if testing.Short() {
 		s.T().Skip("skipping test in unit-tests mode.")
@@ -82,17 +87,27 @@ func (s *BasicFuncTestSuite) TestGovModule() {
 
 	type test struct {
 		name   string
-		msgGen func() sdk.Msg
+		msgGen func(client.Context) sdk.Msg
 	}
 
 	tests := []test{
 		{
 			"submit a text governace proposal",
-			func() sdk.Msg {
+			func(c client.Context) sdk.Msg {
+				kr := c.Keyring
+				rec, err := kr.Key(s.accounts[0])
+				require.NoError(err)
+				addr, err := rec.GetAddress()
+				require.NoError(err)
+				coins := sdk.NewCoins(
+					sdk.NewCoin(app.BondDenom, sdk.NewInt(1000000000)),
+				)
 				propContent := legacygovtypes.NewTextProposal("test", "anarchy")
 				msgContent, err := v1.NewLegacyContent(propContent, govModuleAddress)
 				require.NoError(err)
-				return msgContent
+				msg, err := v1.NewMsgSubmitProposal([]sdk.Msg{msgContent}, coins, addr.String(), "none")
+				require.NoError(err)
+				return msg
 			},
 		},
 	}
@@ -126,7 +141,90 @@ func (s *BasicFuncTestSuite) TestGovModule() {
 
 			builder := signer.NewTxBuilder(opts...)
 
-			msg := tc.msgGen()
+			msg := tc.msgGen(clientCtx)
+
+			tx, err := signer.BuildSignedTx(builder, msg)
+			require.NoError(err)
+
+			rawTx, err := s.cfg.TxConfig.TxEncoder()(tx)
+			require.NoError(err)
+
+			rec := signer.GetSignerInfo()
+			addr, err := rec.GetAddress()
+			require.NoError(err)
+
+			res, err := val.ClientCtx.BroadcastTxSync(rawTx)
+			require.NoError(err)
+			fmt.Println("sync resp", res.Logs, res.RawLog, res.Info, "signer", addr.String())
+			assert.Equal(abci.CodeTypeOK, res.Code)
+			hexHash := res.TxHash
+
+			// wait a block to clear the txs
+			require.NoError(s.network.WaitForNextBlock())
+			require.NoError(s.network.WaitForNextBlock())
+
+			hash, err := hex.DecodeString(hexHash)
+			require.NoError(err)
+
+			qres, err := node.Tx(context.Background(), hash, false)
+			require.NoError(err)
+
+			fmt.Println(qres.TxResult.Code, qres.TxResult.Log, qres.TxResult.GasUsed, qres.TxResult.GasWanted)
+		})
+	}
+}
+
+func (s *BasicFuncTestSuite) TestBankModule() {
+	require := s.Require()
+	assert := s.Assert()
+	val := s.network.Validators[0]
+
+	type test struct {
+		name   string
+		msgGen func(client.Context) sdk.Msg
+	}
+
+	tests := []test{
+		{
+			"submit a text governace proposal",
+			func(c client.Context) sdk.Msg {
+				msg, err := createSendMsg(c, s.accounts[0], s.accounts[1], 1000000)
+				require.NoError(err)
+				return msg
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			clientCtx := val.ClientCtx
+			kr := clientCtx.Keyring
+			node, err := clientCtx.GetNode()
+			require.NoError(err)
+
+			// quick check of balances
+			bals, err := queryForBalance(clientCtx, s.accounts[0])
+			require.NoError(err)
+			fmt.Println(bals)
+
+			signer := types.NewKeyringSigner(kr, s.accounts[0], clientCtx.ChainID)
+
+			err = signer.UpdateAccountFromClient(clientCtx)
+			require.NoError(err)
+
+			coin := sdk.Coin{
+				Denom:  app.BondDenom,
+				Amount: sdk.NewInt(1000000),
+			}
+
+			opts := []types.TxBuilderOption{
+				types.SetFeeAmount(sdk.NewCoins(coin)),
+				types.SetGasLimit(1000000000),
+			}
+
+			builder := signer.NewTxBuilder(opts...)
+
+			msg := tc.msgGen(clientCtx)
 
 			tx, err := signer.BuildSignedTx(builder, msg)
 			require.NoError(err)
@@ -175,4 +273,28 @@ func queryForBalance(c client.Context, acc string) (string, error) {
 	}
 
 	return res.Balances.String(), nil
+}
+
+func createSendMsg(c client.Context, acc1, acc2 string, amount int64) (sdk.Msg, error) {
+	kr := c.Keyring
+	rec1, err := kr.Key(acc1)
+	if err != nil {
+		return nil, err
+	}
+	addr1, err := rec1.GetAddress()
+	if err != nil {
+		return nil, err
+	}
+	rec2, err := kr.Key(acc2)
+	if err != nil {
+		return nil, err
+	}
+	addr2, err := rec2.GetAddress()
+	if err != nil {
+		return nil, err
+	}
+	coins := sdk.NewCoins(
+		sdk.NewCoin(app.BondDenom, sdk.NewInt(amount)),
+	)
+	return banktypes.NewMsgSend(addr1, addr2, coins), nil
 }
