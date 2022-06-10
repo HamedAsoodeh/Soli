@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -16,22 +17,27 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	v1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1"
 	legacygovtypes "github.com/cosmos/cosmos-sdk/x/gov/types/v1beta1"
+	paramscutils "github.com/cosmos/cosmos-sdk/x/params/client/utils"
+	paramproposal "github.com/cosmos/cosmos-sdk/x/params/types/proposal"
 	"github.com/stretchr/testify/suite"
 	abci "github.com/tendermint/tendermint/abci/types"
 	tmrand "github.com/tendermint/tendermint/libs/rand"
+	"google.golang.org/grpc"
 )
 
 // BasicFuncTestSuite is used to check for basic functionality from the cosmos-sdk
 type BasicFuncTestSuite struct {
 	suite.Suite
 
-	cfg      cosmosnet.Config
-	encCfg   encoding.EncodingConfig
-	network  *cosmosnet.Network
-	kr       keyring.Keyring
-	accounts []string
+	cfg        cosmosnet.Config
+	encCfg     encoding.EncodingConfig
+	network    *cosmosnet.Network
+	kr         keyring.Keyring
+	clientConn *grpc.ClientConn
+	accounts   []string
 }
 
 func NewBasicFuncTestSuite(cfg cosmosnet.Config) *BasicFuncTestSuite {
@@ -58,6 +64,11 @@ func (s *BasicFuncTestSuite) SetupSuite() {
 
 	net := network.New(s.T(), s.cfg, s.accounts...)
 
+	// nodeGRPCAddr := strings.Replace(net.Validators[0].Ctx.Config.RPC.GRPCListenAddress, "0.0.0.0", "localhost", 1)
+	// grpcClient, err := grpc.Dial(nodeGRPCAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// s.Require().NoError(err)
+	// s.clientConn = grpcClient
+
 	s.network = net
 	s.kr = net.Validators[0].ClientCtx.Keyring
 	s.encCfg = encoding.MakeEncodingConfig(app.ModuleEncodingRegisters...)
@@ -83,7 +94,7 @@ func (s *BasicFuncTestSuite) TestGovModule() {
 	require := s.Require()
 	assert := s.Assert()
 	val := s.network.Validators[0]
-	govModuleAddress := authtypes.NewModuleAddress(types.ModuleName).String()
+	govModuleAddress := authtypes.NewModuleAddress(govtypes.ModuleName).String()
 
 	type test struct {
 		name   string
@@ -92,21 +103,66 @@ func (s *BasicFuncTestSuite) TestGovModule() {
 
 	tests := []test{
 		{
-			"submit a text governace proposal",
+			"submit a legacy text governace proposal",
 			func(c client.Context) sdk.Msg {
 				kr := c.Keyring
+
 				rec, err := kr.Key(s.accounts[0])
 				require.NoError(err)
+
 				addr, err := rec.GetAddress()
 				require.NoError(err)
+
 				coins := sdk.NewCoins(
 					sdk.NewCoin(app.BondDenom, sdk.NewInt(1000000000)),
 				)
 				propContent := legacygovtypes.NewTextProposal("test", "anarchy")
 				msgContent, err := v1.NewLegacyContent(propContent, govModuleAddress)
 				require.NoError(err)
+
 				msg, err := v1.NewMsgSubmitProposal([]sdk.Msg{msgContent}, coins, addr.String(), "none")
 				require.NoError(err)
+
+				return msg
+			},
+		},
+		{
+			"submit a legacy params change",
+			func(c client.Context) sdk.Msg {
+				jsonProposal := `{
+					"title": "Increase Signed Blocks Window Parameter to 2880",
+					"description": "Mamaki Testnet initially started with very strict slashing conditions. This proposal changes the signed_blocks_window to about 24 hours.",
+					"changes": [
+					  {
+						"subspace": "slashing",
+						"key": "SignedBlocksWindow",
+						"value": "2880"
+					  }
+					],
+					"deposit": "100000utia"
+				  }`
+
+				kr := c.Keyring
+
+				rec, err := kr.Key(s.accounts[0])
+				require.NoError(err)
+
+				addr, err := rec.GetAddress()
+				require.NoError(err)
+				var proposal paramscutils.ParamChangeProposalJSON
+				err = json.Unmarshal([]byte(jsonProposal), &proposal)
+				require.NoError(err)
+
+				content := paramproposal.NewParameterChangeProposal(
+					proposal.Title, proposal.Description, proposal.Changes.ToParamChanges(),
+				)
+
+				deposit, err := sdk.ParseCoinsNormalized(proposal.Deposit)
+				require.NoError(err)
+
+				msg, err := legacygovtypes.NewMsgSubmitProposal(content, deposit, addr)
+				require.NoError(err)
+
 				return msg
 			},
 		},
@@ -120,7 +176,7 @@ func (s *BasicFuncTestSuite) TestGovModule() {
 			require.NoError(err)
 
 			// quick check of balances
-			bals, err := queryForBalance(clientCtx, s.accounts[0])
+			bals, err := queryForBalance(clientCtx, clientCtx.GRPCClient, s.accounts[0])
 			require.NoError(err)
 			fmt.Println(bals)
 
@@ -131,7 +187,7 @@ func (s *BasicFuncTestSuite) TestGovModule() {
 
 			coin := sdk.Coin{
 				Denom:  app.BondDenom,
-				Amount: sdk.NewInt(1000000),
+				Amount: sdk.NewInt(100000000),
 			}
 
 			opts := []types.TxBuilderOption{
@@ -156,6 +212,7 @@ func (s *BasicFuncTestSuite) TestGovModule() {
 			res, err := val.ClientCtx.BroadcastTxSync(rawTx)
 			require.NoError(err)
 			fmt.Println("sync resp", res.Logs, res.RawLog, res.Info, "signer", addr.String())
+			fmt.Println("granter", tx.FeeGranter().String(), "payer", tx.FeePayer().String())
 			assert.Equal(abci.CodeTypeOK, res.Code)
 			hexHash := res.TxHash
 
@@ -169,7 +226,7 @@ func (s *BasicFuncTestSuite) TestGovModule() {
 			qres, err := node.Tx(context.Background(), hash, false)
 			require.NoError(err)
 
-			fmt.Println(qres.TxResult.Code, qres.TxResult.Log, qres.TxResult.GasUsed, qres.TxResult.GasWanted)
+			fmt.Println("query", qres.TxResult.Code, "LOGG", qres.TxResult.Log, "EVENTS", qres.TxResult.Events, "INFO", qres.TxResult.Info)
 		})
 	}
 }
@@ -203,7 +260,7 @@ func (s *BasicFuncTestSuite) TestBankModule() {
 			require.NoError(err)
 
 			// quick check of balances
-			bals, err := queryForBalance(clientCtx, s.accounts[0])
+			bals, err := queryForBalance(clientCtx, clientCtx.GRPCClient, s.accounts[0])
 			require.NoError(err)
 			fmt.Println(bals)
 
@@ -252,7 +309,7 @@ func (s *BasicFuncTestSuite) TestBankModule() {
 	}
 }
 
-func queryForBalance(c client.Context, acc string) (string, error) {
+func queryForBalance(c client.Context, conn *grpc.ClientConn, acc string) (string, error) {
 	kr := c.Keyring
 	rec, err := kr.Key(acc)
 	if err != nil {
@@ -264,7 +321,7 @@ func queryForBalance(c client.Context, acc string) (string, error) {
 		return "", err
 	}
 
-	qc := banktypes.NewQueryClient(c.GRPCClient)
+	qc := banktypes.NewQueryClient(conn)
 	res, err := qc.AllBalances(context.Background(), &banktypes.QueryAllBalancesRequest{
 		Address: addr.String(),
 	})
