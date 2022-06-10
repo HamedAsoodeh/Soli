@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/celestiaorg/celestia-app/app"
@@ -26,6 +27,7 @@ import (
 	abci "github.com/tendermint/tendermint/abci/types"
 	tmrand "github.com/tendermint/tendermint/libs/rand"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // BasicFuncTestSuite is used to check for basic functionality from the cosmos-sdk
@@ -64,16 +66,16 @@ func (s *BasicFuncTestSuite) SetupSuite() {
 
 	net := network.New(s.T(), s.cfg, s.accounts...)
 
-	// nodeGRPCAddr := strings.Replace(net.Validators[0].Ctx.Config.RPC.GRPCListenAddress, "0.0.0.0", "localhost", 1)
-	// grpcClient, err := grpc.Dial(nodeGRPCAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	// s.Require().NoError(err)
-	// s.clientConn = grpcClient
+	nodeGRPCAddr := strings.Replace(net.Validators[0].AppConfig.GRPC.Address, "0.0.0.0", "localhost", 1)
+	grpcClient, err := grpc.Dial(nodeGRPCAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	s.Require().NoError(err)
+	s.clientConn = grpcClient
 
 	s.network = net
 	s.kr = net.Validators[0].ClientCtx.Keyring
 	s.encCfg = encoding.MakeEncodingConfig(app.ModuleEncodingRegisters...)
 
-	_, err := s.network.WaitForHeight(1)
+	_, err = s.network.WaitForHeight(1)
 	s.Require().NoError(err)
 }
 
@@ -176,7 +178,7 @@ func (s *BasicFuncTestSuite) TestGovModule() {
 			require.NoError(err)
 
 			// quick check of balances
-			bals, err := queryForBalance(clientCtx, clientCtx.GRPCClient, s.accounts[0])
+			bals, err := queryForBalance(clientCtx, s.clientConn, s.accounts[0])
 			require.NoError(err)
 			fmt.Println(bals)
 
@@ -260,7 +262,7 @@ func (s *BasicFuncTestSuite) TestBankModule() {
 			require.NoError(err)
 
 			// quick check of balances
-			bals, err := queryForBalance(clientCtx, clientCtx.GRPCClient, s.accounts[0])
+			bals, err := queryForBalance(clientCtx, s.clientConn, s.accounts[0])
 			require.NoError(err)
 			fmt.Println(bals)
 
