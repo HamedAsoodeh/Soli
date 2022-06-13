@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/celestiaorg/celestia-app/app"
@@ -26,20 +25,17 @@ import (
 	"github.com/stretchr/testify/suite"
 	abci "github.com/tendermint/tendermint/abci/types"
 	tmrand "github.com/tendermint/tendermint/libs/rand"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 // BasicFuncTestSuite is used to check for basic functionality from the cosmos-sdk
 type BasicFuncTestSuite struct {
 	suite.Suite
 
-	cfg        cosmosnet.Config
-	encCfg     encoding.EncodingConfig
-	network    *cosmosnet.Network
-	kr         keyring.Keyring
-	clientConn *grpc.ClientConn
-	accounts   []string
+	cfg      cosmosnet.Config
+	encCfg   encoding.EncodingConfig
+	network  *cosmosnet.Network
+	kr       keyring.Keyring
+	accounts []string
 }
 
 func NewBasicFuncTestSuite(cfg cosmosnet.Config) *BasicFuncTestSuite {
@@ -48,11 +44,6 @@ func NewBasicFuncTestSuite(cfg cosmosnet.Config) *BasicFuncTestSuite {
 
 func (s *BasicFuncTestSuite) SetupSuite() {
 	s.T().Log("setting up integration test suite")
-	cfg := sdk.GetConfig()
-	cfg.SetBech32PrefixForAccount(app.Bech32PrefixAccAddr, app.Bech32PrefixAccPub)
-	cfg.SetBech32PrefixForValidator(app.Bech32PrefixValAddr, app.Bech32PrefixValPub)
-	cfg.SetBech32PrefixForConsensusNode(app.Bech32PrefixConsAddr, app.Bech32PrefixConsPub)
-	cfg.Seal()
 
 	if testing.Short() {
 		s.T().Skip("skipping test in unit-tests mode.")
@@ -66,11 +57,8 @@ func (s *BasicFuncTestSuite) SetupSuite() {
 
 	net := network.New(s.T(), s.cfg, s.accounts...)
 
-	nodeGRPCAddr := strings.Replace(net.Validators[0].AppConfig.GRPC.Address, "0.0.0.0", "localhost", 1)
-	grpcClient, err := grpc.Dial(nodeGRPCAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	err := network.GRPCConn(net)
 	s.Require().NoError(err)
-	s.clientConn = grpcClient
-
 	s.network = net
 	s.kr = net.Validators[0].ClientCtx.Keyring
 	s.encCfg = encoding.MakeEncodingConfig(app.ModuleEncodingRegisters...)
@@ -178,7 +166,7 @@ func (s *BasicFuncTestSuite) TestGovModule() {
 			require.NoError(err)
 
 			// quick check of balances
-			bals, err := queryForBalance(clientCtx, s.clientConn, s.accounts[0])
+			bals, err := queryForBalance(clientCtx, s.accounts[0])
 			require.NoError(err)
 			fmt.Println(bals)
 
@@ -262,7 +250,7 @@ func (s *BasicFuncTestSuite) TestBankModule() {
 			require.NoError(err)
 
 			// quick check of balances
-			bals, err := queryForBalance(clientCtx, s.clientConn, s.accounts[0])
+			bals, err := queryForBalance(clientCtx, s.accounts[0])
 			require.NoError(err)
 			fmt.Println(bals)
 
@@ -311,7 +299,7 @@ func (s *BasicFuncTestSuite) TestBankModule() {
 	}
 }
 
-func queryForBalance(c client.Context, conn *grpc.ClientConn, acc string) (string, error) {
+func queryForBalance(c client.Context, acc string) (string, error) {
 	kr := c.Keyring
 	rec, err := kr.Key(acc)
 	if err != nil {
@@ -323,7 +311,7 @@ func queryForBalance(c client.Context, conn *grpc.ClientConn, acc string) (strin
 		return "", err
 	}
 
-	qc := banktypes.NewQueryClient(conn)
+	qc := banktypes.NewQueryClient(c.GRPCClient)
 	res, err := qc.AllBalances(context.Background(), &banktypes.QueryAllBalancesRequest{
 		Address: addr.String(),
 	})
