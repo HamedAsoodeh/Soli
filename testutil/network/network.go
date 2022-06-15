@@ -24,6 +24,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// New initializes a new fully functional celestia-app test using the provided
+// network config. Any genesis accounts are funded.
 func New(t *testing.T, config network.Config, genAccNames ...string) *network.Network {
 	kr := keyring.NewInMemory(config.Codec)
 
@@ -53,6 +55,8 @@ func New(t *testing.T, config network.Config, genAccNames ...string) *network.Ne
 	return net
 }
 
+// GRPCConn creates and connects a grpc client to the first validator in the
+// network. The resulting grpc client connection is stored in the client context
 func GRPCConn(net *network.Network) error {
 	nodeGRPCAddr := strings.Replace(net.Validators[0].AppConfig.GRPC.Address, "0.0.0.0", "localhost", 1)
 	conn, err := grpc.Dial(nodeGRPCAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -129,7 +133,6 @@ func newGenAccout(kr keyring.Keyring, name string, amount int64) (authtypes.Gene
 
 	// create coin
 	balances := sdk.NewCoins(
-		sdk.NewCoin(fmt.Sprintf("%stoken", app.BondDenom), sdk.NewInt(amount)),
 		sdk.NewCoin(app.BondDenom, sdk.NewInt(amount)),
 	)
 
