@@ -217,6 +217,7 @@ func (s *BasicFuncTestSuite) TestGovModule() {
 			require.NoError(err)
 
 			fmt.Println("query", qres.TxResult.Code, "LOGG", qres.TxResult.Log, "EVENTS", qres.TxResult.Events, "INFO", qres.TxResult.Info)
+			assert.Greater(qres.TxResult.GasUsed, int64(0))
 		})
 	}
 }
