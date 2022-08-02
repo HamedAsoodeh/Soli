@@ -29,7 +29,7 @@ func estimateSquareSize(data *core.Data, txConf client.TxConfig) uint64 {
 	// incrememtally check square sizes by adding padding to messages in order
 	// to account for the non-interactive default rules
 	for fits := false; !fits; {
-		fits = estimateNonInteractiveDefaultPadding(squareSize, msgShareCounts)
+		fits = estimateNonInteractiveDefaultPadding(txShares+evdShares, squareSize, msgShareCounts)
 		// increment the square size
 		squareSize = int(types.NextHighestPowerOf2(uint64(squareSize) + 1))
 		if squareSize >= consts.MaxSquareSize {
@@ -45,14 +45,14 @@ func estimateSquareSize(data *core.Data, txConf client.TxConfig) uint64 {
 	}
 }
 
-// rawShareCount returns an estimate of the needed square size to fit the
-// provided block data.
+// rawShareCount calculates the number of shares taken by all of the included
+// txs, evidence, and each msg.
 //
-// NOTE: It assumes that every malleatable tx has a viable
-// commit for whatever square size that we end up picking. This is a flaw in
-// this estimation algorithm, where someone can submit a max sized wPFD to the
-// mempool, and as long as there are other wPFDs in the mempool, will force all
-// block producers using this code to produce a block with the max square size.
+// NOTE: It assumes that every malleatable tx has a viable commit for whatever
+// square size that we end up picking. This is a flaw in this estimation
+// algorithm, where someone can submit a max sized wPFD to the mempool, and as
+// long as there are other wPFDs in the mempool, will force all block producers
+// using this code to produce a block with the max square size.
 func rawShareCount(data *core.Data, txConf client.TxConfig) (txShares, evdShares int, msgShareCounts []int) {
 	// msgSummary is used to keep track fo the size and the namespace so that we
 	// can sort the namespaces before returning
@@ -64,7 +64,7 @@ func rawShareCount(data *core.Data, txConf client.TxConfig) (txShares, evdShares
 	var msgSummaries []msgSummary
 
 	// we use bytes instead of shares for tx and evd as they are encoded
-	// contiguously in the square, unlike msgs, each of which is assigned their
+	// contiguously in the square, unlike msgs where each of which is assigned their
 	// own set of shares
 	txBytes, evdBytes := 0, 0
 	for _, rawTx := range data.Txs {
@@ -126,30 +126,25 @@ func rawShareCount(data *core.Data, txConf client.TxConfig) (txShares, evdShares
 
 // estimateNonInteractiveDefaultPadding uses the non interactive default rules
 // to estimate the total number of shares required by a set of messages.
-func estimateNonInteractiveDefaultPadding(origSquareSize int, msgShareCounts []int) (fits bool) {
-	// keep track of where we are in the row so we can see if a msg can fit
-	rowCursor, colCursor := 0, 0
+func estimateNonInteractiveDefaultPadding(cursor, origSquareSize int, msgShareCounts []int) (fits bool) {
 	for _, msgLen := range msgShareCounts {
-		// if the row overlaps more than one row by itself, then we know if has
-		// to start on its own row
-		if rowsUsed := msgLen / origSquareSize; rowsUsed > 0 {
-			rowCursor += rowsUsed
-			colCursor = msgLen % origSquareSize
-			continue
-		}
-
-		// if the msg overlaps the current row
-		if msgLen+colCursor > origSquareSize {
-			rowCursor++
-			colCursor = 0
-		}
-
-		if rowCursor > origSquareSize {
+		currentRow := (cursor / origSquareSize)
+		currentCol := cursor % origSquareSize
+		switch {
+		// check if we're finished
+		case currentRow >= origSquareSize:
 			return false
+		// we overflow to the next row, so start at the next row
+		case (currentCol + msgLen) > origSquareSize:
+			cursor = (origSquareSize * (currentRow + 1)) - 1 + msgLen
+		// the msg fits on this row, therefore increase the cursor by msgLen
+		default:
+			cursor += msgLen
 		}
 	}
-
+	// this check catches the edge case where the last message overflows rows
+	if cursor/origSquareSize >= origSquareSize {
+		return false
+	}
 	return true
 }
-
-// func nextPos(origSquareSize, int) (int, int)
