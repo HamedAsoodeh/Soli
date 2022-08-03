@@ -16,10 +16,10 @@ import (
 // assuming that all malleated txs follow the non interactive default rules.
 func estimateSquareSize(data *core.Data, txConf client.TxConfig) uint64 {
 	// get the raw count of shares taken by each type of block data
-	txShares, evdShares, msgShareCounts := rawShareCount(data, txConf)
+	txShares, evdShares, msgLens := rawShareCount(data, txConf)
 
 	msgShares := 0
-	for _, msgLen := range msgShareCounts {
+	for _, msgLen := range msgLens {
 		msgShares += msgLen
 	}
 
@@ -29,7 +29,7 @@ func estimateSquareSize(data *core.Data, txConf client.TxConfig) uint64 {
 	// incrememtally check square sizes by adding padding to messages in order
 	// to account for the non-interactive default rules
 	for fits := false; !fits; {
-		fits = estimateNonInteractiveDefaultPadding(txShares+evdShares, squareSize, msgShareCounts)
+		fits = checkFitInSquare(txShares+evdShares, squareSize, msgLens...)
 		// increment the square size
 		squareSize = int(types.NextHighestPowerOf2(uint64(squareSize) + 1))
 		if squareSize >= consts.MaxSquareSize {
@@ -53,7 +53,7 @@ func estimateSquareSize(data *core.Data, txConf client.TxConfig) uint64 {
 // algorithm, where someone can submit a max sized wPFD to the mempool, and as
 // long as there are other wPFDs in the mempool, will force all block producers
 // using this code to produce a block with the max square size.
-func rawShareCount(data *core.Data, txConf client.TxConfig) (txShares, evdShares int, msgShareCounts []int) {
+func rawShareCount(data *core.Data, txConf client.TxConfig) (txShares, evdShares int, msgLens []int) {
 	// msgSummary is used to keep track fo the size and the namespace so that we
 	// can sort the namespaces before returning
 	type msgSummary struct {
@@ -121,13 +121,15 @@ func rawShareCount(data *core.Data, txConf client.TxConfig) (txShares, evdShares
 		msgShares[i] = summary.size
 	}
 
-	return txShares, evdShares, msgShareCounts
+	return txShares, evdShares, msgLens
 }
 
-// estimateNonInteractiveDefaultPadding uses the non interactive default rules
-// to estimate the total number of shares required by a set of messages.
-func estimateNonInteractiveDefaultPadding(cursor, origSquareSize int, msgShareCounts []int) (fits bool) {
-	for _, msgLen := range msgShareCounts {
+// checkFitInSquare uses the non interactive default rules to see if messages of
+// some lengths will fit in a square of size origSquareSize starting at share
+// index cursor. See non-interactive default rules
+// https://github.com/celestiaorg/celestia-specs/blob/master/src/rationale/message_block_layout.md#non-interactive-default-rules
+func checkFitInSquare(cursor, origSquareSize int, msgLens ...int) (fits bool) {
+	for _, msgLen := range msgLens {
 		currentRow := (cursor / origSquareSize)
 		currentCol := cursor % origSquareSize
 		switch {
@@ -147,4 +149,62 @@ func estimateNonInteractiveDefaultPadding(cursor, origSquareSize int, msgShareCo
 		return false
 	}
 	return true
+}
+
+// nextAlignedPowerOfTwo calculates the next index in a row that is an aligned
+// power of two or returns false is the msg cannot fit on the given row at the
+// next aligned power of two. An aligned power of two means that the largest
+// power of two that fits entirely in the msg or the square size. pls see specs
+// for further details. Assumes that cursor < k, all args are non negative, and
+// that k is a power of two.
+// https://github.com/celestiaorg/celestia-specs/blob/master/src/rationale/message_block_layout.md#non-interactive-default-rules
+func nextAlignedPowerOfTwo(cursor, msgLen, k int) (int, bool) {
+	// if we're starting at the beginning of the row, then return as there are
+	// no cases where we don't. This check is redundant to one performed in
+	// checkFitsInRow, but just to explicit and future proof, this has been left
+	// in.
+	if cursor == 0 {
+		return cursor, true
+	}
+	// if the aligned power of two is larger than the room left in the row, then
+	// the msg will not fit. We add 1 here to adjust for cursor being 0 indexed.
+	nextLowest := nextLowestPowerOfTwo(msgLen)
+	if k-nextLowest < cursor {
+		return 0, false
+	}
+	// round up to nearest aligned power of two
+	cursor = roundUpBy(cursor, nextLowest)
+	if cursor+msgLen > k {
+		return 0, false
+	}
+	return cursor, true
+}
+
+// roundUpBy rounds cursor up to the next interval of v. If cursor is divisible
+// by v, then it returns cursor
+func roundUpBy(cursor, v int) int {
+	switch {
+	case cursor == 0:
+		return cursor
+	case cursor%v == 0:
+		return cursor
+	default:
+		return ((cursor / v) + 1) * v
+	}
+}
+
+func nextPowerOfTwo(v int) int {
+	k := 1
+	for k < v {
+		k = k << 1
+	}
+	return k
+}
+
+func nextLowestPowerOfTwo(v int) int {
+	c := nextPowerOfTwo(v)
+	if c == v {
+		return c
+	}
+	return c / 2
 }

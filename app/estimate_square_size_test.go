@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -68,8 +69,156 @@ func Test_estimateNonInteractiveDefaultPadding(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res := estimateNonInteractiveDefaultPadding(tt.start, tt.size, tt.msgs)
+			res := checkFitInSquare(tt.start, tt.size, tt.msgs...)
 			assert.Equal(t, tt.fits, res)
 		})
+	}
+}
+
+func Test_checkFitsInRow(t *testing.T) {
+	type test struct {
+		name              string
+		cursor, msgLen, k int
+		expectedIndex     int
+		fits              bool
+	}
+	tests := []test{
+		{
+			name:          "whole row msgLen 4",
+			cursor:        0,
+			msgLen:        4,
+			k:             4,
+			fits:          true,
+			expectedIndex: 0,
+		},
+		{
+			name:          "half row msgLen 2 cursor 1",
+			cursor:        1,
+			msgLen:        2,
+			k:             4,
+			fits:          true,
+			expectedIndex: 2,
+		},
+		{
+			name:          "half row msgLen 2 cursor 2",
+			cursor:        2,
+			msgLen:        2,
+			k:             4,
+			fits:          true,
+			expectedIndex: 2,
+		},
+		{
+			name:          "half row msgLen 4 cursor 3",
+			cursor:        3,
+			msgLen:        4,
+			k:             8,
+			fits:          true,
+			expectedIndex: 4,
+		},
+		{
+			name:          "msgLen 5 cursor 3 size 8",
+			cursor:        3,
+			msgLen:        5,
+			k:             8,
+			fits:          false,
+			expectedIndex: 0,
+		},
+		{
+			name:          "msgLen 2 cursor 3 square size 8",
+			cursor:        3,
+			msgLen:        2,
+			k:             8,
+			fits:          true,
+			expectedIndex: 4,
+		},
+		{
+			name:          "cursor 3 msgLen 5 size 8",
+			cursor:        3,
+			msgLen:        5,
+			k:             8,
+			fits:          false,
+			expectedIndex: 0,
+		},
+		{
+			name:          "msglen 12 cursor 1 size 16",
+			cursor:        1,
+			msgLen:        12,
+			k:             16,
+			fits:          false,
+			expectedIndex: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, fits := nextAlignedPowerOfTwo(tt.cursor, tt.msgLen, tt.k)
+			assert.Equal(t, tt.fits, fits)
+			if tt.fits {
+				assert.Equal(t, tt.expectedIndex, res)
+			}
+		})
+	}
+
+}
+
+func Test_roundUpBy(t *testing.T) {
+	type test struct {
+		cursor, v     int
+		expectedIndex int
+	}
+	tests := []test{
+		{
+			cursor:        1,
+			v:             2,
+			expectedIndex: 2,
+		},
+		{
+			cursor:        2,
+			v:             2,
+			expectedIndex: 2,
+		},
+		{
+			cursor:        0,
+			v:             2,
+			expectedIndex: 0,
+		},
+		{
+			cursor:        5,
+			v:             2,
+			expectedIndex: 6,
+		},
+		{
+			cursor:        8,
+			v:             16,
+			expectedIndex: 16,
+		},
+		{
+			cursor:        33,
+			v:             1,
+			expectedIndex: 33,
+		},
+		{
+			cursor:        32,
+			v:             16,
+			expectedIndex: 32,
+		},
+		{
+			cursor:        33,
+			v:             16,
+			expectedIndex: 48,
+		},
+	}
+	for i, tt := range tests {
+		t.Run(
+			fmt.Sprintf(
+				"test %d: %d cursor %d v %d expectedIndex",
+				i,
+				tt.cursor,
+				tt.v,
+				tt.expectedIndex,
+			),
+			func(t *testing.T) {
+				res := roundUpBy(tt.cursor, tt.v)
+				assert.Equal(t, tt.expectedIndex, res)
+			})
 	}
 }
