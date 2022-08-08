@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"sort"
 
-	"github.com/celestiaorg/celestia-app/pkg/inclusion/appconsts"
+	"github.com/celestiaorg/celestia-app/pkg/appconsts"
 	"github.com/celestiaorg/celestia-app/x/payment/types"
 	"github.com/tendermint/tendermint/pkg/consts"
 	coretypes "github.com/tendermint/tendermint/proto/tendermint/types"
