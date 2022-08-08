@@ -1,12 +1,10 @@
-package app_test
+package app
 
 import (
 	"bytes"
 	"testing"
 
-	"github.com/celestiaorg/celestia-app/app"
 	"github.com/celestiaorg/celestia-app/app/encoding"
-	"github.com/celestiaorg/celestia-app/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tendermint/tendermint/pkg/consts"
@@ -16,7 +14,7 @@ import (
 )
 
 func TestSplitShares(t *testing.T) {
-	encCfg := encoding.MakeConfig(app.ModuleEncodingRegisters...)
+	encCfg := encoding.MakeConfig(ModuleEncodingRegisters...)
 
 	type test struct {
 		squareSize      uint64
@@ -24,19 +22,19 @@ func TestSplitShares(t *testing.T) {
 		expectedTxCount int
 	}
 
-	signer := testutil.GenerateKeyringSigner(t, testAccName)
+	signer := generateKeyringSigner(t, testAccName)
 
 	firstNS := []byte{2, 2, 2, 2, 2, 2, 2, 2}
 	firstMessage := bytes.Repeat([]byte{4}, 512)
-	firstRawTx := generateRawTx(t, encCfg.TxConfig, firstNS, firstMessage, signer, 2, 4, 8)
+	firstRawTx := generateRawWirePFDTx(t, encCfg.TxConfig, firstNS, firstMessage, signer, 2, 4, 8)
 
 	secondNS := []byte{1, 1, 1, 1, 1, 1, 1, 1}
 	secondMessage := []byte{2}
-	secondRawTx := generateRawTx(t, encCfg.TxConfig, secondNS, secondMessage, signer, 2, 4, 8)
+	secondRawTx := generateRawWirePFDTx(t, encCfg.TxConfig, secondNS, secondMessage, signer, 2, 4, 8)
 
 	thirdNS := []byte{3, 3, 3, 3, 3, 3, 3, 3}
 	thirdMessage := []byte{1}
-	thirdRawTx := generateRawTx(t, encCfg.TxConfig, thirdNS, thirdMessage, signer, 2, 8)
+	thirdRawTx := generateRawWirePFDTx(t, encCfg.TxConfig, thirdNS, thirdMessage, signer, 2, 8)
 
 	tests := []test{
 		{
@@ -79,7 +77,8 @@ func TestSplitShares(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		square, data := app.SplitShares(encCfg.TxConfig, tt.squareSize, tt.data)
+		parsedTxs := parseTxs(encCfg.TxConfig, tt.data.Txs)
+		square, data := SplitShares(encCfg.TxConfig, tt.squareSize, parsedTxs, tt.data.Evidence)
 
 		// has the expected number of txs
 		assert.Equal(t, tt.expectedTxCount, len(data.Txs))

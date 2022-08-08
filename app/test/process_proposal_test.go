@@ -8,6 +8,7 @@ import (
 	"github.com/celestiaorg/celestia-app/app"
 	"github.com/celestiaorg/celestia-app/app/encoding"
 	"github.com/celestiaorg/celestia-app/testutil"
+	"github.com/celestiaorg/celestia-app/testutil/testtxs"
 	"github.com/celestiaorg/celestia-app/x/payment/types"
 	"github.com/celestiaorg/nmt/namespace"
 	"github.com/cosmos/cosmos-sdk/client"
@@ -23,7 +24,7 @@ import (
 )
 
 func TestMessageInclusionCheck(t *testing.T) {
-	signer := testutil.GenerateKeyringSigner(t, testAccName)
+	signer := testutil.GenerateKeyringSigner(t, testtxs.TestAccountName)
 
 	testApp := testutil.SetupTestAppWithGenesisValSet(t)
 
@@ -169,7 +170,7 @@ func TestProcessMessagesWithReservedNamespaces(t *testing.T) {
 	testApp := testutil.SetupTestAppWithGenesisValSet(t)
 	encConf := encoding.MakeConfig(app.ModuleEncodingRegisters...)
 
-	signer := testutil.GenerateKeyringSigner(t, testAccName)
+	signer := testutil.GenerateKeyringSigner(t, testtxs.TestAccountName)
 
 	type test struct {
 		name           string
@@ -225,7 +226,7 @@ func TestProcessMessageWithParityShareNamespaces(t *testing.T) {
 	testApp := testutil.SetupTestAppWithGenesisValSet(t)
 	encConf := encoding.MakeConfig(app.ModuleEncodingRegisters...)
 
-	signer := testutil.GenerateKeyringSigner(t, testAccName)
+	signer := testutil.GenerateKeyringSigner(t, testtxs.TestAccountName)
 
 	pfd, msg := genRandMsgPayForDataForNamespace(t, signer, 8, consts.ParitySharesNamespaceID)
 	input := abci.RequestProcessProposal{

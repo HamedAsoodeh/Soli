@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 
+	"github.com/celestiaorg/celestia-app/app/encoding"
 	"github.com/celestiaorg/celestia-app/x/payment/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	abci "github.com/tendermint/tendermint/abci/types"
@@ -26,7 +27,7 @@ func (app *App) ProcessProposal(req abci.RequestProcessProposal) abci.ResponsePr
 	// also see https://github.com/celestiaorg/celestia-app/issues/226
 	commitmentCounter := 0
 	for _, rawTx := range req.BlockData.Txs {
-		tx, err := MalleatedTxDecoder(app.txConfig.TxDecoder())(rawTx)
+		tx, err := encoding.MalleatedTxDecoder(app.txConfig.TxDecoder())(rawTx)
 		if err != nil {
 			continue
 		}

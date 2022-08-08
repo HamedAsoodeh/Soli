@@ -7,10 +7,8 @@ import (
 	"github.com/celestiaorg/celestia-app/app"
 	"github.com/celestiaorg/celestia-app/app/encoding"
 	"github.com/celestiaorg/celestia-app/testutil"
-	"github.com/celestiaorg/celestia-app/x/payment/types"
+	"github.com/celestiaorg/celestia-app/testutil/testtxs"
 	"github.com/celestiaorg/nmt/namespace"
-	"github.com/cosmos/cosmos-sdk/client"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,7 +18,7 @@ import (
 )
 
 func TestPrepareProposal(t *testing.T) {
-	signer := testutil.GenerateKeyringSigner(t, testAccName)
+	signer := testutil.GenerateKeyringSigner(t, testtxs.TestAccountName)
 
 	encCfg := encoding.MakeConfig(app.ModuleEncodingRegisters...)
 
@@ -34,15 +32,15 @@ func TestPrepareProposal(t *testing.T) {
 
 	firstNS := []byte{2, 2, 2, 2, 2, 2, 2, 2}
 	firstMessage := bytes.Repeat([]byte{4}, 512)
-	firstRawTx := generateRawTx(t, encCfg.TxConfig, firstNS, firstMessage, signer, 2, 4, 8, 16)
+	firstRawTx := testtxs.GenerateRawWirePFDTx(t, encCfg.TxConfig, firstNS, firstMessage, signer, 2, 4, 8, 16)
 
 	secondNS := []byte{1, 1, 1, 1, 1, 1, 1, 1}
 	secondMessage := []byte{2}
-	secondRawTx := generateRawTx(t, encCfg.TxConfig, secondNS, secondMessage, signer, 2, 4, 8, 16)
+	secondRawTx := testtxs.GenerateRawWirePFDTx(t, encCfg.TxConfig, secondNS, secondMessage, signer, 2, 4, 8, 16)
 
 	thirdNS := []byte{3, 3, 3, 3, 3, 3, 3, 3}
 	thirdMessage := []byte{1}
-	thirdRawTx := generateRawTx(t, encCfg.TxConfig, thirdNS, thirdMessage, signer, 2, 4, 8, 16)
+	thirdRawTx := testtxs.GenerateRawWirePFDTx(t, encCfg.TxConfig, thirdNS, thirdMessage, signer, 2, 4, 8, 16)
 
 	tests := []test{
 		{
@@ -79,7 +77,7 @@ func TestPrepareProposal(t *testing.T) {
 		if err != nil {
 			require.NoError(t, err)
 		}
-		dec := app.MalleatedTxDecoder(encCfg.TxConfig.TxDecoder())
+		dec := encoding.MalleatedTxDecoder(encCfg.TxConfig.TxDecoder())
 		for _, tx := range res.BlockData.Txs {
 			sTx, err := dec(tx)
 			require.NoError(t, err)
@@ -108,7 +106,7 @@ func TestPrepareMessagesWithReservedNamespaces(t *testing.T) {
 	testApp := testutil.SetupTestAppWithGenesisValSet(t)
 	encCfg := encoding.MakeConfig(app.ModuleEncodingRegisters...)
 
-	signer := testutil.GenerateKeyringSigner(t, testAccName)
+	signer := testutil.GenerateKeyringSigner(t, testtxs.TestAccountName)
 
 	type test struct {
 		name             string
@@ -126,7 +124,7 @@ func TestPrepareMessagesWithReservedNamespaces(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tx := generateRawTx(t, encCfg.TxConfig, tt.namespace, []byte{1}, signer, 2, 4, 8, 16)
+		tx := testtxs.GenerateRawWirePFDTx(t, encCfg.TxConfig, tt.namespace, []byte{1}, signer, 2, 4, 8, 16)
 		input := abci.RequestPrepareProposal{
 			BlockData: &core.Data{
 				Txs: [][]byte{tx},
@@ -136,47 +134,3 @@ func TestPrepareMessagesWithReservedNamespaces(t *testing.T) {
 		assert.Equal(t, tt.expectedMessages, len(res.BlockData.Messages.MessagesList))
 	}
 }
-
-func generateRawTx(t *testing.T, txConfig client.TxConfig, ns, message []byte, signer *types.KeyringSigner, ks ...uint64) (rawTx []byte) {
-	coin := sdk.Coin{
-		Denom:  app.BondDenom,
-		Amount: sdk.NewInt(10),
-	}
-
-	opts := []types.TxBuilderOption{
-		types.SetFeeAmount(sdk.NewCoins(coin)),
-		types.SetGasLimit(10000000),
-	}
-
-	// create a msg
-	msg := generateSignedWirePayForData(t, ns, message, signer, opts, ks...)
-
-	builder := signer.NewTxBuilder(opts...)
-
-	tx, err := signer.BuildSignedTx(builder, msg)
-	require.NoError(t, err)
-
-	// encode the tx
-	rawTx, err = txConfig.TxEncoder()(tx)
-	require.NoError(t, err)
-
-	return rawTx
-}
-
-func generateSignedWirePayForData(t *testing.T, ns, message []byte, signer *types.KeyringSigner, options []types.TxBuilderOption, ks ...uint64) *types.MsgWirePayForData {
-	msg, err := types.NewWirePayForData(ns, message, ks...)
-	if err != nil {
-		t.Error(err)
-	}
-
-	err = msg.SignShareCommitments(signer, options...)
-	if err != nil {
-		t.Error(err)
-	}
-
-	return msg
-}
-
-const (
-	testAccName = "test-account"
-)

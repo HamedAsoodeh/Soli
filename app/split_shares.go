@@ -20,17 +20,17 @@ import (
 // discarded. This is reflected in the returned block data. Note: pointers to
 // block data are only used to avoid dereferening, not because we need the block
 // data to be mutable.
-func SplitShares(txConf client.TxConfig, squareSize uint64, data *core.Data) ([][]byte, *core.Data) {
+func SplitShares(txConf client.TxConfig, squareSize uint64, txs []parsedTx, evd core.EvidenceList) ([][]byte, *core.Data) {
 	processedTxs := make([][]byte, 0)
 	// we initiate this struct here so that the empty output is identiacal in
 	// tests
 	messages := core.Messages{}
 
-	sqwr := newShareSplitter(txConf, squareSize, data)
+	sqwr := newShareSplitter(txConf, squareSize, evd)
 
-	for _, rawTx := range data.Txs {
+	for _, pTx := range txs {
 		// decode the Tx
-		tx, err := txConf.TxDecoder()(rawTx)
+		tx, err := txConf.TxDecoder()(pTx.rawTx)
 		if err != nil {
 			continue
 		}
@@ -42,7 +42,7 @@ func SplitShares(txConf client.TxConfig, squareSize uint64, data *core.Data) ([]
 
 		// skip txs that don't contain messages
 		if !types.HasWirePayForData(authTx) {
-			success, err := sqwr.writeTx(rawTx)
+			success, err := sqwr.writeTx(pTx.rawTx)
 			if err != nil {
 				continue
 			}
@@ -50,7 +50,7 @@ func SplitShares(txConf client.TxConfig, squareSize uint64, data *core.Data) ([]
 				// the square is full
 				break
 			}
-			processedTxs = append(processedTxs, rawTx)
+			processedTxs = append(processedTxs, pTx.rawTx)
 			continue
 		}
 
@@ -80,7 +80,7 @@ func SplitShares(txConf client.TxConfig, squareSize uint64, data *core.Data) ([]
 		}
 
 		// attempt to malleate and write the resulting tx + msg to the square
-		parentHash := sha256.Sum256(rawTx)
+		parentHash := sha256.Sum256(pTx.rawTx)
 		success, malTx, message, err := sqwr.writeMalleatedTx(parentHash[:], authTx, wireMsg)
 		if err != nil {
 			continue
@@ -103,13 +103,15 @@ func SplitShares(txConf client.TxConfig, squareSize uint64, data *core.Data) ([]
 	return sqwr.export(), &core.Data{
 		Txs:      processedTxs,
 		Messages: messages,
-		Evidence: data.Evidence,
+		Evidence: evd,
 	}
 }
 
-// shareSplitter write a data square using provided block data. It also ensures
-// that message and their corresponding txs get written to the square
-// atomically.
+// shareSplitter is used to encode the block data into a data square. It ensures
+// that messages and their corresponding txs get written to the square
+// atomically by writing each tx/message one by one and keeping track of the
+// state of the square. When writing messages to the data square, it follows the
+// non-interactive default rules defined in the specs.
 type shareSplitter struct {
 	txWriter  *coretypes.ContiguousShareWriter
 	msgWriter *coretypes.MessageShareWriter
@@ -124,7 +126,7 @@ type shareSplitter struct {
 	txConf        client.TxConfig
 }
 
-func newShareSplitter(txConf client.TxConfig, squareSize uint64, data *core.Data) *shareSplitter {
+func newShareSplitter(txConf client.TxConfig, squareSize uint64, evd core.EvidenceList) *shareSplitter {
 	sqwr := shareSplitter{
 		squareSize:    squareSize,
 		maxShareCount: int(squareSize * squareSize),
@@ -132,7 +134,7 @@ func newShareSplitter(txConf client.TxConfig, squareSize uint64, data *core.Data
 	}
 
 	evdData := new(coretypes.EvidenceData)
-	err := evdData.FromProto(&data.Evidence)
+	err := evdData.FromProto(&evd)
 	if err != nil {
 		panic(err)
 	}
