@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"sort"
 
+	"github.com/celestiaorg/celestia-app/pkg/shares"
 	"github.com/celestiaorg/celestia-app/x/payment/types"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/x/auth/signing"
@@ -113,11 +114,11 @@ func SplitShares(txConf client.TxConfig, squareSize uint64, txs []parsedTx, evd 
 // state of the square. When writing messages to the data square, it follows the
 // non-interactive default rules defined in the specs.
 type shareSplitter struct {
-	txWriter  *coretypes.ContiguousShareWriter
-	msgWriter *coretypes.MessageShareWriter
+	txWriter  *shares.ContiguousShareSplitter
+	msgWriter *shares.MessageShareSplitter
 
 	// Since evidence will always be included in a block, we do not need to
-	// generate these share lazily. Therefore instead of a ContiguousShareWriter
+	// generate these share lazily. Therefore instead of a ContiguousShareSplitter
 	// we use the normal eager mechanism
 	evdShares [][]byte
 
@@ -140,8 +141,8 @@ func newShareSplitter(txConf client.TxConfig, squareSize uint64, evd core.Eviden
 	}
 	sqwr.evdShares = evdData.SplitIntoShares().RawShares()
 
-	sqwr.txWriter = coretypes.NewContiguousShareWriter(consts.TxNamespaceID)
-	sqwr.msgWriter = coretypes.NewMessageShareWriter()
+	sqwr.txWriter = shares.NewContiguousShareSplitter(consts.TxNamespaceID)
+	sqwr.msgWriter = shares.NewMessageShareSplitter()
 
 	return &sqwr
 }
@@ -158,7 +159,7 @@ func (sqwr *shareSplitter) writeTx(tx []byte) (ok bool, err error) {
 		return false, nil
 	}
 
-	sqwr.txWriter.Write(delimTx)
+	sqwr.txWriter.WriteBytes(delimTx)
 	return true, nil
 }
 
@@ -189,7 +190,7 @@ func (sqwr *shareSplitter) writeMalleatedTx(
 		return false, nil, nil, err
 	}
 
-	wrappedTx, err := coretypes.WrapMalleatedTx(parentHash[:], rawProcessedTx)
+	wrappedTx, err := coretypes.WrapMalleatedTx(parentHash[:], 0, rawProcessedTx)
 	if err != nil {
 		return false, nil, nil, err
 	}
@@ -205,7 +206,7 @@ func (sqwr *shareSplitter) writeMalleatedTx(
 		return false, nil, nil, err
 	}
 
-	sqwr.txWriter.Write(delimTx)
+	sqwr.txWriter.WriteBytes(delimTx)
 	sqwr.msgWriter.Write(coretypes.Message{
 		NamespaceID: coreMsg.NamespaceId,
 		Data:        coreMsg.Data,
