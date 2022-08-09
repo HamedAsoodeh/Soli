@@ -10,7 +10,7 @@ import (
 	coretypes "github.com/tendermint/tendermint/types"
 )
 
-// MessageShareSplitter lazily merges messages into shares that will eventually be
+// MessageShareSplitter lazily splits messages into shares that will eventually be
 // included in a data square. It also has methods to help progressively count
 // how many shares the messages written take up.
 type MessageShareSplitter struct {
