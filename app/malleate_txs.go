@@ -43,8 +43,7 @@ func malleateTx(
 
 	originalHash := sha256.Sum256(tx.rawTx)
 
-	// TODO: pass the share index when we start using a branch of tendermint that supports wrapped txs
-	wrappedTx, err := coretypes.WrapMalleatedTx(originalHash[:], rawProcessedTx)
+	wrappedTx, err := coretypes.WrapMalleatedTx(originalHash[:], 0, rawProcessedTx)
 	if err != nil {
 		return nil, nil, err
 	}
