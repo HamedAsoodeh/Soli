@@ -60,7 +60,7 @@ func Test_estimateNonInteractiveDefaultPadding(t *testing.T) {
 	}
 }
 
-func Test_checkFitsInRow(t *testing.T) {
+func TestNextAlignedPowerOfTwo(t *testing.T) {
 	type test struct {
 		name              string
 		cursor, msgLen, k int

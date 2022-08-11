@@ -1,5 +1,32 @@
 package shares
 
+import coretypes "github.com/tendermint/tendermint/types"
+
+// SplitMessageUsingNIDefaultsUnbounded needs a better name lol. splits the
+// provided messages into shares following the non-interactive defaults. This is
+// unbounded in that it doesn't actually stop splitting shares when the square
+// is filled. This is useful for creating prioritized blocks. We can generate
+// the a large number of shares, and then remove the least prioritized messages
+// later until we have a set of shares that fit inside the block.
+func SplitMessagesUsingNIDefaultsUnbounded(rowSize, start int, msgs []coretypes.Message) (*MessageShareSplitter, []uint32) {
+	cursor := start
+	indexes := []uint32{uint32(start)}
+	splitter := NewMessageShareSplitter()
+	for _, msg := range msgs {
+		nextCursor, fits := NextAlignedPowerOfTwo(cursor, len(msg.Data), rowSize)
+		// if the largest power of two portion of the message doesn't fit on
+		// this row, then it must start on the next row.
+		if !fits {
+			nextCursor = ((cursor/rowSize)+1)*rowSize - 1
+		}
+		splitter.WriteNamespacedPaddedShares(nextCursor - cursor)
+		splitter.Write(msg)
+		indexes = append(indexes, uint32(nextCursor))
+		cursor = nextCursor + len(msg.Data)
+	}
+	return splitter, indexes
+}
+
 // FitsInSquare uses the non interactive default rules to see if messages of
 // some lengths will fit in a square of size origSquareSize starting at share
 // index cursor. See non-interactive default rules

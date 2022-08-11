@@ -25,7 +25,7 @@ func SplitShares(txConf client.TxConfig, squareSize uint64, txs []parsedTx, evd 
 	processedTxs := make([][]byte, 0)
 	// we initiate this struct here so that the empty output is identiacal in
 	// tests
-	messages := core.Messages{}
+	messages := coretypes.Messages{}
 
 	sqwr := newShareSplitter(txConf, squareSize, evd)
 
@@ -94,18 +94,29 @@ func SplitShares(txConf client.TxConfig, squareSize uint64, txs []parsedTx, evd 
 			continue
 		}
 		processedTxs = append(processedTxs, malTx)
-		messages.MessagesList = append(messages.MessagesList, message)
+		messages.MessagesList = append(messages.MessagesList, *message)
 	}
 
 	sort.Slice(messages.MessagesList, func(i, j int) bool {
-		return bytes.Compare(messages.MessagesList[i].NamespaceId, messages.MessagesList[j].NamespaceId) < 0
+		return bytes.Compare(messages.MessagesList[i].NamespaceID, messages.MessagesList[j].NamespaceID) < 0
 	})
 
 	return sqwr.export(), &core.Data{
 		Txs:      processedTxs,
-		Messages: messages,
+		Messages: core.Messages{MessagesList: messagesToProto(messages.MessagesList)},
 		Evidence: evd,
 	}
+}
+
+func messagesToProto(msgs []coretypes.Message) []*core.Message {
+	protoMsgs := make([]*core.Message, len(msgs))
+	for i, msg := range msgs {
+		protoMsgs[i] = &core.Message{
+			NamespaceId: msg.NamespaceID,
+			Data:        msg.Data,
+		}
+	}
+	return protoMsgs
 }
 
 // shareSplitter is used to encode the block data into a data square. It ensures
@@ -171,7 +182,7 @@ func (sqwr *shareSplitter) writeMalleatedTx(
 	parentHash []byte,
 	tx signing.Tx,
 	wpfd *types.MsgWirePayForData,
-) (ok bool, malleatedTx coretypes.Tx, msg *core.Message, err error) {
+) (ok bool, malleatedTx coretypes.Tx, msg *coretypes.Message, err error) {
 	// parse wire message and create a single message
 	coreMsg, unsignedPFD, sig, err := types.ProcessWirePayForData(wpfd, sqwr.squareSize)
 	if err != nil {
@@ -207,12 +218,9 @@ func (sqwr *shareSplitter) writeMalleatedTx(
 	}
 
 	sqwr.txWriter.WriteBytes(delimTx)
-	sqwr.msgWriter.Write(coretypes.Message{
-		NamespaceID: coreMsg.NamespaceId,
-		Data:        coreMsg.Data,
-	})
+	sqwr.msgWriter.Write(coreMsg)
 
-	return true, wrappedTx, coreMsg, nil
+	return true, wrappedTx, &coreMsg, nil
 }
 
 func (sqwr *shareSplitter) hasRoomForBoth(tx, msg []byte) bool {

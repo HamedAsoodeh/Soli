@@ -11,7 +11,7 @@ import (
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	"github.com/tendermint/tendermint/pkg/consts"
-	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
+	coretypes "github.com/tendermint/tendermint/types"
 )
 
 var _ sdk.Msg = &MsgWirePayForData{}
@@ -203,7 +203,7 @@ func (msg *MsgWirePayForData) unsignedPayForData(k uint64) (*MsgPayForData, erro
 // ProcessWirePayForData performs the malleation process that occurs before
 // creating a block. It parses the MsgWirePayForData to produce the components
 // needed to create a single MsgPayForData.
-func ProcessWirePayForData(msg *MsgWirePayForData, squareSize uint64) (*tmproto.Message, *MsgPayForData, []byte, error) {
+func ProcessWirePayForData(msg *MsgWirePayForData, squareSize uint64) (coretypes.Message, *MsgPayForData, []byte, error) {
 	// make sure that a ShareCommitAndSignature of the correct size is
 	// included in the message
 	var shareCommit ShareCommitAndSignature
@@ -214,25 +214,25 @@ func ProcessWirePayForData(msg *MsgWirePayForData, squareSize uint64) (*tmproto.
 		}
 	}
 	if shareCommit.Signature == nil {
-		return nil,
+		return coretypes.MessageEmpty,
 			nil,
 			nil,
 			fmt.Errorf("message does not commit to current square size: %d", squareSize)
 	}
 
 	// add the message to the list of core message to be returned to ll-core
-	coreMsg := tmproto.Message{
-		NamespaceId: msg.GetMessageNameSpaceId(),
+	coreMsg := coretypes.Message{
+		NamespaceID: msg.GetMessageNameSpaceId(),
 		Data:        msg.GetMessage(),
 	}
 
 	// wrap the signed transaction data
 	pfd, err := msg.unsignedPayForData(squareSize)
 	if err != nil {
-		return nil, nil, nil, err
+		return coretypes.MessageEmpty, nil, nil, err
 	}
 
-	return &coreMsg, pfd, shareCommit.Signature, nil
+	return coreMsg, pfd, shareCommit.Signature, nil
 }
 
 // HasWirePayForData performs a quick but not definitive check to see if a tx

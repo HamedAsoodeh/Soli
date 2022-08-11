@@ -307,7 +307,7 @@ func TestProcessMessage(t *testing.T) {
 
 		// ensure that the shared fields are identical
 		assert.Equal(t, tt.msg, message.Data, tt.name)
-		assert.Equal(t, tt.ns, message.NamespaceId, tt.name)
+		assert.Equal(t, tt.ns, message.NamespaceID, tt.name)
 		assert.Equal(t, wpfd.Signer, spfd.Signer, tt.name)
 		assert.Equal(t, wpfd.MessageNameSpaceId, spfd.MessageNamespaceId, tt.name)
 		assert.Equal(t, wpfd.MessageShareCommitment[0].ShareCommitment, spfd.MessageShareCommitment, tt.name)
