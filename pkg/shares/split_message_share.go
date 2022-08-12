@@ -42,7 +42,7 @@ func (msw *MessageShareSplitter) RemoveMessage(i int) (int, error) {
 	if len(msw.shares) > i+1 {
 		_, msgLen, err := ParseDelimiter(msw.shares[i+1][0].Share[consts.NamespaceSize:])
 		if err != nil {
-			return err
+			return 0, err
 		}
 		// 0 means that there is padding after the share that we are about to
 		// remove. to remove this padding, we increase j by 1
