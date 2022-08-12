@@ -41,23 +41,30 @@ func FitsInSquare(cursor, origSquareSize int, msgLens ...int) (fits bool) {
 	// rules to check if they will fit
 	for _, msgLen := range msgLens {
 		currentRow := (cursor / origSquareSize)
-		currentCol := cursor % origSquareSize
-		switch {
-		// check if we're finished
-		case currentRow >= origSquareSize:
+		if currentRow >= origSquareSize {
 			return false
-		// we overflow to the next row, so start at the next row
-		case (currentCol + msgLen) > origSquareSize:
-			cursor = (origSquareSize * (currentRow + 1)) - 1 + msgLen
-		// the msg fits on this row, therefore increase the cursor by msgLen
-		default:
-			cursor += msgLen
 		}
+		cursor, fits := NextAlignedPowerOfTwo(cursor, msgLen, origSquareSize)
+		if !fits {
+			cursor = (currentRow+1)*origSquareSize - 1
+		}
+		cursor += msgLen
 	}
 	// perform one last check that catches the edge case where the last message
 	// overflows rows
 	return cursor/origSquareSize <= origSquareSize
 }
+
+// 	// check if we're finished
+// case currentRow >= origSquareSize:
+// 	return false
+// // we overflow to the next row, so start at the next row
+// case (currentCol + msgLen) > origSquareSize:
+// 	cursor = (origSquareSize * (currentRow + 1)) - 1 + msgLen
+// // the msg fits on this row, therefore increase the cursor by msgLen
+// default:
+// 	cursor += msgLen
+// }
 
 // NextAlignedPowerOfTwo calculates the next index in a row that is an aligned
 // power of two or returns false is the msg cannot fit on the given row at the
