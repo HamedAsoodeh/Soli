@@ -1,6 +1,10 @@
 package shares
 
-import coretypes "github.com/tendermint/tendermint/types"
+import (
+	"errors"
+
+	coretypes "github.com/tendermint/tendermint/types"
+)
 
 // SplitMessageUsingNIDefaultsUnbounded needs a better name lol. splits the
 // provided messages into shares following the non-interactive defaults. This is
@@ -8,30 +12,33 @@ import coretypes "github.com/tendermint/tendermint/types"
 // is filled. This is useful for creating prioritized blocks. We can generate
 // the a large number of shares, and then remove the least prioritized messages
 // later until we have a set of shares that fit inside the block.
-func SplitMessagesUsingNIDefaultsUnbounded(rowSize, start int, msgs []coretypes.Message) (*MessageShareSplitter, []uint32) {
-	cursor := start
-	indexes := []uint32{uint32(start)}
+func SplitMessagesUsingNIDefaults(cursor, origSquareSize int, msgs []coretypes.Message) ([][]byte, []uint32, error) {
+	indexes := []uint32{uint32(cursor)}
 	splitter := NewMessageShareSplitter()
 	for _, msg := range msgs {
-		nextCursor, fits := NextAlignedPowerOfTwo(cursor, len(msg.Data), rowSize)
+		row := cursor / origSquareSize
+		if row > origSquareSize {
+			return nil, nil, errors.New("failure to split messages: square size too small")
+		}
+		nextCursor, fits := NextAlignedPowerOfTwo(cursor, len(msg.Data), origSquareSize)
 		// if the largest power of two portion of the message doesn't fit on
 		// this row, then it must start on the next row.
 		if !fits {
-			nextCursor = ((cursor/rowSize)+1)*rowSize - 1
+			nextCursor = ((row)+1)*origSquareSize - 1
 		}
 		splitter.WriteNamespacedPaddedShares(nextCursor - cursor)
 		splitter.Write(msg)
 		indexes = append(indexes, uint32(nextCursor))
 		cursor = nextCursor + len(msg.Data)
 	}
-	return splitter, indexes
+	return splitter.Export().RawShares(), indexes, nil
 }
 
 // FitsInSquare uses the non interactive default rules to see if messages of
 // some lengths will fit in a square of size origSquareSize starting at share
 // index cursor. See non-interactive default rules
 // https://github.com/celestiaorg/celestia-specs/blob/master/src/rationale/message_block_layout.md#non-interactive-default-rules
-func FitsInSquare(cursor, origSquareSize int, msgLens ...int) (fits bool) {
+func FitsInSquare(cursor, origSquareSize int, msgLens ...int) bool {
 	// if there are 0 messages and the cursor already fits inside the square,
 	// then we already know that everything fits in the square.
 	if len(msgLens) == 0 && cursor/origSquareSize <= origSquareSize {
@@ -53,6 +60,21 @@ func FitsInSquare(cursor, origSquareSize int, msgLens ...int) (fits bool) {
 	// perform one last check that catches the edge case where the last message
 	// overflows rows
 	return cursor/origSquareSize <= origSquareSize
+}
+
+// MessageSharesUsed calculates the number of shares used by a given set of
+// messages. It follows the non-interactive default rules.
+func MessageSharesUsed(cursor, origSquareSize int, msgLens ...int) int {
+	start := 0
+	for _, msgLen := range msgLens {
+		currentRow := (cursor / origSquareSize)
+		cursor, fits := NextAlignedPowerOfTwo(cursor, msgLen, origSquareSize)
+		if !fits {
+			cursor = (currentRow+1)*origSquareSize - 1
+		}
+		cursor += msgLen
+	}
+	return start - cursor
 }
 
 // 	// check if we're finished
