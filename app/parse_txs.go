@@ -38,11 +38,54 @@ func (p *parsedTx) wrap(shareIndex uint32) (coretypes.Tx, error) {
 	return coretypes.WrapMalleatedTx(p.originalHash(), shareIndex, p.malleatedTx)
 }
 
-func (p *parsedTx) message() core.Message {
-	return core.Message{
+func (p *parsedTx) message() *core.Message {
+	return &core.Message{
 		NamespaceId: p.msg.MessageNameSpaceId,
 		Data:        p.msg.Message,
 	}
+}
+
+type parsedTxs []*parsedTx
+
+func (p parsedTxs) export(indexes []uint32) ([]coretypes.Tx, error) {
+	if p.countMalleated() != len(indexes) {
+		return nil, errors.New("mismatched number of indexes and malleated txs")
+	}
+	exported := make([]coretypes.Tx, len(p))
+	counter := 0
+	for i, ptx := range p {
+		if ptx.malleatedTx == nil {
+			exported[i] = ptx.rawTx
+			continue
+		}
+		wrappedTx, err := ptx.wrap(indexes[counter])
+		if err != nil {
+			return nil, err
+		}
+		exported[i] = wrappedTx
+		counter++
+	}
+
+	return exported, nil
+}
+
+func (p parsedTxs) countMalleated() int {
+	count := 0
+	for _, pTx := range p {
+		if pTx.malleatedTx != nil {
+			count++
+		}
+	}
+	return count
+}
+
+func (p parsedTxs) remove(i int) parsedTxs {
+	if i >= len(p) {
+		return p
+	}
+	copy(p[i:], p[i+1:])
+	p[len(p)-1] = nil
+	return p[:len(p)-1]
 }
 
 // parseTxs decodes raw tendermint txs along with checking if they contain any
@@ -91,42 +134,4 @@ func parseTxs(conf client.TxConfig, rawTxs [][]byte) parsedTxs {
 		parsedTxs = append(parsedTxs, &pTx)
 	}
 	return parsedTxs
-}
-
-type parsedTxs []*parsedTx
-
-func (p parsedTxs) pruneShares(count int) parsedTxs {
-	return p
-}
-
-func (p parsedTxs) countMalleated() int {
-	count := 0
-	for _, pTx := range p {
-		if pTx.malleatedTx != nil {
-			count++
-		}
-	}
-	return count
-}
-
-func (p parsedTxs) export(indexes []uint32) ([]coretypes.Tx, error) {
-	if p.countMalleated() != len(indexes) {
-		return nil, errors.New("mismatched number of indexes and malleated txs")
-	}
-	exported := make([]coretypes.Tx, len(p))
-	counter := 0
-	for i, ptx := range p {
-		if ptx.malleatedTx == nil {
-			exported[i] = ptx.rawTx
-			continue
-		}
-		wrappedTx, err := ptx.wrap(indexes[counter])
-		if err != nil {
-			return nil, err
-		}
-		exported[i] = wrappedTx
-		counter++
-	}
-
-	return exported, nil
 }

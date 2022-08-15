@@ -8,16 +8,20 @@ import (
 	core "github.com/tendermint/tendermint/proto/tendermint/types"
 )
 
-func malleateTxs(txConf client.TxConfig, squareSize uint64, txs parsedTxs) (parsedTxs, []core.Message, error) {
+func malleateTxs(txConf client.TxConfig, squareSize uint64, txs parsedTxs) (parsedTxs, []*core.Message) {
 	var err error
-	var msgs []core.Message
-	for _, pTx := range txs {
+	var msgs []*core.Message
+	for i, pTx := range txs {
 		if pTx.malleatedTx != nil {
 			err = pTx.malleate(txConf, squareSize)
+			if err != nil {
+				txs.remove(i)
+				continue
+			}
 			msgs = append(msgs, pTx.message())
 		}
 	}
-	return txs, msgs, err
+	return txs, msgs
 }
 
 func (p *parsedTx) malleate(txConf client.TxConfig, squareSize uint64) error {

@@ -1,8 +1,10 @@
 package app
 
 import (
+	"github.com/celestiaorg/celestia-app/pkg/shares"
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/pkg/da"
+	core "github.com/tendermint/tendermint/proto/tendermint/types"
 )
 
 // PrepareProposal fullfills the celestia-core version of the ABCI interface by
@@ -19,7 +21,31 @@ func (app *App) PrepareProposal(req abci.RequestPrepareProposal) abci.ResponsePr
 
 	// estimate the square size. This estimation errors on the side of larger
 	// squares but can only return values within the min and max square size.
-	squareSize := estimateSquareSize(parsedTxs, req.BlockData.Evidence)
+	squareSize, totalSharesUsed := estimateSquareSize(parsedTxs, req.BlockData.Evidence)
+
+	if totalSharesUsed > int(squareSize*squareSize) {
+		parsedTxs = prune(app.txConfig, parsedTxs, totalSharesUsed, int(squareSize))
+	}
+
+	malleatedTxs, messages := malleateTxs(app.txConfig, squareSize, parsedTxs)
+
+	// calculate the indexes that will be used for each message
+	messageIndexes := []uint32{}
+
+	// wrap the malleated txs with their message's starting position
+	wrappedMalleatedTxs, err := malleatedTxs.export(messageIndexes)
+	if err != nil {
+		// todo handle
+	}
+
+	blockData := core.Data{
+		Txs:                wrappedMalleatedTxs,
+		Evidence:           req.BlockData.Evidence,
+		Messages:           core.Messages{MessagesList: messages},
+		OriginalSquareSize: squareSize,
+	}
+
+	dataSquare, err := shares.Split(blockData.ToProto())
 
 	// encode the parsed transactions to the share format and create the
 	// protobuf encoded equivalent version of this block data. MsgWirePayForData
@@ -29,7 +55,6 @@ func (app *App) PrepareProposal(req abci.RequestPrepareProposal) abci.ResponsePr
 	// the data square, we follow the non-interactive default rules to ensure
 	// that the malleated payment txs (MsgPayForData) have a corresponding data
 	// blob (message) in the same square.
-	dataSquare, blockData := SplitShares(app.txConfig, squareSize, parsedTxs, req.BlockData.Evidence)
 
 	// erasure the data square which we use to create the data root.
 	eds, err := da.ExtendShares(squareSize, dataSquare)
@@ -53,6 +78,6 @@ func (app *App) PrepareProposal(req abci.RequestPrepareProposal) abci.ResponsePr
 	// tendermint doesn't need to use any of the erasure data, as only the
 	// protobuf encoded version of the block data is gossiped.
 	return abci.ResponsePrepareProposal{
-		BlockData: blockData,
+		BlockData: &blockData,
 	}
 }

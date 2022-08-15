@@ -6,13 +6,59 @@ import (
 
 	"github.com/celestiaorg/celestia-app/pkg/appconsts"
 	"github.com/celestiaorg/celestia-app/pkg/shares"
+	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/tendermint/tendermint/pkg/consts"
 	coretypes "github.com/tendermint/tendermint/proto/tendermint/types"
 )
 
+// prune removes txs until the set of txs will fit in the square of size
+// squareSize. It assumes that the currentShareCount is accurate. This function
+// is not perfectly accurate becuse accurately knowing how many shares any give
+// malleated tx and its message takes up in a data square that is following the
+// non-interactive default rules requires recalculating the square.
+func prune(txConf client.TxConfig, txs []*parsedTx, currentShareCount, squareSize int) parsedTxs {
+	maxShares := squareSize * squareSize
+	if maxShares >= currentShareCount {
+		return txs
+	}
+	goal := currentShareCount - maxShares
+
+	removedContiguousShares := 0
+	contigBytesCursor := 0
+	removedMessageShares := 0
+	removedTxs := 0
+
+	// adjustContigCursor checks if enough contiguous bytes have been removed
+	// inorder to tally total contiguous shares removed
+	adjustContigCursor := func(l int) {
+		contigBytesCursor += l + shares.DelimLen(uint64(l))
+		if contigBytesCursor >= consts.TxShareSize {
+			removedContiguousShares += (contigBytesCursor / consts.TxShareSize)
+			contigBytesCursor = contigBytesCursor % consts.TxShareSize
+		}
+	}
+
+	for i := len(txs) - 1; (removedContiguousShares + removedMessageShares) >= goal; i-- {
+		removedTxs++
+		if txs[i].msg == nil {
+			adjustContigCursor(len(txs[i].rawTx))
+			continue
+		}
+
+		removedMessageShares += shares.MsgSharesUsed(len(txs[i].msg.GetMessage()))
+		// we ignore the error here, as if there is an error malleating the tx,
+		// then it we need to remove it anyway and will not end up contributing
+		// bytes to the square anyway.
+		_ = txs[i].malleate(txConf, uint64(squareSize))
+		adjustContigCursor(len(txs[i].malleatedTx) + appconsts.MalleatedTxBytes)
+	}
+
+	return txs[:len(txs)-removedTxs]
+}
+
 // estimateSquareSize uses the provided block data to estimate the square size
 // assuming that all malleated txs follow the non interactive default rules.
-func estimateSquareSize(txs []*parsedTx, evd coretypes.EvidenceList) uint64 {
+func estimateSquareSize(txs []*parsedTx, evd coretypes.EvidenceList) (uint64, int) {
 	// get the raw count of shares taken by each type of block data
 	txShares, evdShares, msgLens := rawShareCount(txs, evd)
 	msgShares := 0
@@ -20,9 +66,11 @@ func estimateSquareSize(txs []*parsedTx, evd coretypes.EvidenceList) uint64 {
 		msgShares += msgLen
 	}
 
+	totalShares := txShares + evdShares + msgShares
+
 	// calculate the smallest possible square size that could contian all the
 	// messages
-	squareSize := nextPowerOfTwo(txShares + evdShares + msgShares)
+	squareSize := nextPowerOfTwo(totalShares)
 	// the starting square size should be the minimum
 	if squareSize < consts.MinSquareSize {
 		squareSize = int(consts.MinSquareSize)
@@ -38,10 +86,10 @@ func estimateSquareSize(txs []*parsedTx, evd coretypes.EvidenceList) uint64 {
 		switch {
 		// stop estimating if we know we can reach the max square size
 		case squareSize >= consts.MaxSquareSize:
-			return consts.MaxSquareSize
+			return consts.MaxSquareSize, totalShares
 		// return if we've found a square size that fits all of the txs
 		case fits:
-			return uint64(squareSize)
+			return uint64(squareSize), totalShares
 		// try the next largest square size if we can't fit all the txs
 		case !fits:
 			// increment the square size
@@ -49,8 +97,6 @@ func estimateSquareSize(txs []*parsedTx, evd coretypes.EvidenceList) uint64 {
 		}
 	}
 }
-
-func estimateContiguousShares(txs []parsedTx, evd coretypes.Evidence)
 
 // rawShareCount calculates the number of shares taken by all of the included
 // txs, evidence, and each msg.
@@ -76,9 +122,9 @@ func rawShareCount(txs []*parsedTx, evd coretypes.EvidenceList) (txShares, evdSh
 			continue
 		}
 
-		// if the there is a malleated txs, then we should also account for the
-		// wrapped tx bytes
-		txBytes += appconsts.MalleatedTxBytes
+		// if the there is a malleated tx, then we want to also account for the
+		// txs that gets included onchain TODO: improve
+		txBytes += appconsts.MalleatedTxBytes + len(pTx.rawTx) - len(pTx.msg.Message) - ((len(pTx.msg.MessageShareCommitment) - 1) * 128)
 
 		msgSummaries = append(msgSummaries, msgSummary{shares.MsgSharesUsed(int(pTx.msg.MessageSize)), pTx.msg.MessageNameSpaceId})
 	}
