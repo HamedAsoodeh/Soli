@@ -5,9 +5,40 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/tendermint/tendermint/pkg/consts"
 )
 
-func Test_estimateNonInteractiveDefaultPadding(t *testing.T) {
+func TestMsgSharesUsedNIDefaults(t *testing.T) {
+	type test struct {
+		cursor, squareSize, expected int
+		msgLens                      []int
+	}
+	tests := []test{
+		{0, 8, 8, []int{8}},
+		{0, 8, 7, []int{7}},
+		{0, 8, 7, []int{3, 3}},
+		{1, 8, 8, []int{3, 3}},
+		{1, 8, 32, []int{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}},
+		{3, 8, 16, []int{5, 7}},
+		{0, 8, 29, []int{5, 5, 5, 5}},
+		{0, 8, 10, []int{10}},
+		{0, 8, 26, []int{10, 10}},
+		{1, 8, 33, []int{10, 10}},
+		{2, 8, 32, []int{10, 10}},
+		{0, 8, 55, []int{21, 31}},
+		{0, 8, 128, []int{64, 64}},
+		{0, consts.MaxSquareSize, 1000, []int{1000}},
+		{0, consts.MaxSquareSize, consts.MaxSquareSize + 1, []int{consts.MaxSquareSize + 1}},
+		{1, consts.MaxSquareSize, (consts.MaxSquareSize * 4) - 1, []int{consts.MaxSquareSize, consts.MaxSquareSize, consts.MaxSquareSize}},
+		{1024, consts.MaxSquareSize, 32, []int{32}},
+	}
+	for i, tt := range tests {
+		res := MsgSharesUsedNIDefaults(tt.cursor, tt.squareSize, tt.msgLens...)
+		assert.Equal(t, tt.expected, res, fmt.Sprintf("test %d: cursor %d, squareSize %d", i, tt.cursor, tt.squareSize))
+	}
+}
+
+func TestFitsInSquare(t *testing.T) {
 	type test struct {
 		name  string
 		msgs  []int
@@ -122,7 +153,7 @@ func TestNextAlignedPowerOfTwo(t *testing.T) {
 			msgLen:        5,
 			k:             8,
 			fits:          false,
-			expectedIndex: 0,
+			expectedIndex: 4,
 		},
 		{
 			name:          "msglen 12 cursor 1 size 16",
@@ -130,16 +161,14 @@ func TestNextAlignedPowerOfTwo(t *testing.T) {
 			msgLen:        12,
 			k:             16,
 			fits:          false,
-			expectedIndex: 0,
+			expectedIndex: 8,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			res, fits := NextAlignedPowerOfTwo(tt.cursor, tt.msgLen, tt.k)
 			assert.Equal(t, tt.fits, fits)
-			if tt.fits {
-				assert.Equal(t, tt.expectedIndex, res)
-			}
+			assert.Equal(t, tt.expectedIndex, res)
 		})
 	}
 

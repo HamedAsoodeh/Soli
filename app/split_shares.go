@@ -21,7 +21,7 @@ import (
 // discarded. This is reflected in the returned block data. Note: pointers to
 // block data are only used to avoid dereferening, not because we need the block
 // data to be mutable.
-func SplitShares(txConf client.TxConfig, squareSize uint64, txs []parsedTx, evd core.EvidenceList) ([][]byte, *core.Data) {
+func SplitShares(txConf client.TxConfig, squareSize uint64, txs []*parsedTx, evd core.EvidenceList) ([][]byte, *core.Data) {
 	processedTxs := make([][]byte, 0)
 	// we initiate this struct here so that the empty output is identiacal in
 	// tests
@@ -226,11 +226,11 @@ func (sqwr *shareSplitter) writeMalleatedTx(
 func (sqwr *shareSplitter) hasRoomForBoth(tx, msg []byte) bool {
 	currentShareCount, availableBytes := sqwr.shareCount()
 
-	txBytesTaken := types.DelimLen(uint64(len(tx))) + len(tx)
+	txBytesTaken := shares.DelimLen(uint64(len(tx))) + len(tx)
 
 	maxTxSharesTaken := ((txBytesTaken - availableBytes) / consts.TxShareSize) + 1 // plus one because we have to add at least one share
 
-	maxMsgSharesTaken := types.MsgSharesUsed(len(msg))
+	maxMsgSharesTaken := shares.MsgSharesUsed(len(msg))
 
 	return currentShareCount+maxTxSharesTaken+maxMsgSharesTaken <= sqwr.maxShareCount
 }
@@ -238,7 +238,7 @@ func (sqwr *shareSplitter) hasRoomForBoth(tx, msg []byte) bool {
 func (sqwr *shareSplitter) hasRoomForTx(tx []byte) bool {
 	currentShareCount, availableBytes := sqwr.shareCount()
 
-	bytesTaken := types.DelimLen(uint64(len(tx))) + len(tx)
+	bytesTaken := shares.DelimLen(uint64(len(tx))) + len(tx)
 	if bytesTaken <= availableBytes {
 		return true
 	}

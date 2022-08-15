@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	sdkerrors "cosmossdk.io/errors"
+	"github.com/celestiaorg/celestia-app/pkg/shares"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -367,7 +368,7 @@ func TestValidateBasic(t *testing.T) {
 // totalMsgSize subtracts the delimiter size from the desired total size. this
 // is useful for testing for messages that occupy exactly so many shares.
 func totalMsgSize(size int) int {
-	return size - DelimLen(uint64(size))
+	return size - shares.DelimLen(uint64(size))
 }
 
 func validWirePayForData(t *testing.T) *MsgWirePayForData {

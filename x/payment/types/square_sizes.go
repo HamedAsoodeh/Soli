@@ -1,6 +1,7 @@
 package types
 
 import (
+	"github.com/celestiaorg/celestia-app/pkg/shares"
 	"github.com/tendermint/tendermint/pkg/consts"
 )
 
@@ -26,7 +27,7 @@ func generateAllSquareSizes() []int {
 func AllSquareSizes(msgSize int) []uint64 {
 	allSizes := allSquareSizes
 	fitSizes := []uint64{}
-	shareCount := MsgSharesUsed(msgSize)
+	shareCount := shares.MsgSharesUsed(msgSize)
 	for _, size := range allSizes {
 		// if the number of shares is larger than that in the square, throw an error
 		// note, we use k*k-1 here because at least a single share will be reserved
@@ -38,17 +39,4 @@ func AllSquareSizes(msgSize int) []uint64 {
 		fitSizes = append(fitSizes, uint64(size))
 	}
 	return fitSizes
-}
-
-// MsgSharesUsed calculates the minimum number of shares a message will take up.
-// It accounts for the necessary delimiter and potential padding.
-func MsgSharesUsed(msgSize int) int {
-	// add the delimiter to the message size
-	msgSize = DelimLen(uint64(msgSize)) + msgSize
-	shareCount := msgSize / consts.MsgShareSize
-	// increment the share count if the message overflows the last counted share
-	if msgSize%consts.MsgShareSize != 0 {
-		shareCount++
-	}
-	return shareCount
 }

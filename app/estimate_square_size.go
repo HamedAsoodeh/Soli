@@ -6,14 +6,13 @@ import (
 
 	"github.com/celestiaorg/celestia-app/pkg/appconsts"
 	"github.com/celestiaorg/celestia-app/pkg/shares"
-	"github.com/celestiaorg/celestia-app/x/payment/types"
 	"github.com/tendermint/tendermint/pkg/consts"
 	coretypes "github.com/tendermint/tendermint/proto/tendermint/types"
 )
 
 // estimateSquareSize uses the provided block data to estimate the square size
 // assuming that all malleated txs follow the non interactive default rules.
-func estimateSquareSize(txs []parsedTx, evd coretypes.EvidenceList) uint64 {
+func estimateSquareSize(txs []*parsedTx, evd coretypes.EvidenceList) uint64 {
 	// get the raw count of shares taken by each type of block data
 	txShares, evdShares, msgLens := rawShareCount(txs, evd)
 	msgShares := 0
@@ -51,9 +50,11 @@ func estimateSquareSize(txs []parsedTx, evd coretypes.EvidenceList) uint64 {
 	}
 }
 
+func estimateContiguousShares(txs []parsedTx, evd coretypes.Evidence)
+
 // rawShareCount calculates the number of shares taken by all of the included
 // txs, evidence, and each msg.
-func rawShareCount(txs []parsedTx, evd coretypes.EvidenceList) (txShares, evdShares int, msgLens []int) {
+func rawShareCount(txs []*parsedTx, evd coretypes.EvidenceList) (txShares, evdShares int, msgLens []int) {
 	// msgSummary is used to keep track fo the size and the namespace so that we
 	// can sort the namespaces before returning.
 	type msgSummary struct {
@@ -79,7 +80,7 @@ func rawShareCount(txs []parsedTx, evd coretypes.EvidenceList) (txShares, evdSha
 		// wrapped tx bytes
 		txBytes += appconsts.MalleatedTxBytes
 
-		msgSummaries = append(msgSummaries, msgSummary{types.MsgSharesUsed(int(pTx.msg.MessageSize)), pTx.msg.MessageNameSpaceId})
+		msgSummaries = append(msgSummaries, msgSummary{shares.MsgSharesUsed(int(pTx.msg.MessageSize)), pTx.msg.MessageNameSpaceId})
 	}
 
 	txShares = txBytes / consts.TxShareSize
@@ -88,7 +89,7 @@ func rawShareCount(txs []parsedTx, evd coretypes.EvidenceList) (txShares, evdSha
 	}
 
 	for _, e := range evd.Evidence {
-		evdBytes += e.Size() + types.DelimLen(uint64(e.Size()))
+		evdBytes += e.Size() + shares.DelimLen(uint64(e.Size()))
 	}
 
 	evdShares = evdBytes / consts.TxShareSize
