@@ -47,7 +47,7 @@ func (p *parsedTx) message() *core.Message {
 
 type parsedTxs []*parsedTx
 
-func (p parsedTxs) export(indexes []uint32) ([][]byte, error) {
+func (p parsedTxs) wrap(indexes []uint32) ([][]byte, error) {
 	if p.countMalleated() != len(indexes) {
 		return nil, errors.New("mismatched number of indexes and malleated txs")
 	}

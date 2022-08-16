@@ -1,6 +1,8 @@
 package app
 
 import (
+	"fmt"
+
 	"github.com/celestiaorg/celestia-app/pkg/shares"
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/pkg/da"
@@ -31,16 +33,23 @@ func (app *App) PrepareProposal(req abci.RequestPrepareProposal) abci.ResponsePr
 		parsedTxs = prune(app.txConfig, parsedTxs, totalSharesUsed, int(squareSize))
 	}
 
+	// in this step we are processing any MsgWirePayForData transactions into
+	// MsgPayForData and their repsective messages. The malleatedTxs contain the
+	// the new sdk.Msg with the original tx's metadata (sequence number, gas
+	// price etc).
 	malleatedTxs, messages := malleateTxs(app.txConfig, squareSize, parsedTxs)
 
+	// the malleated transactions still need to be wrapped with the starting
+	// share index of the message, which we still need to calculate. Here we
+	// calculate the exact share counts used by the different tyeps of block
+	// data in order to get an accurate index.
 	contigousShareCount := calculateContigShareCount(malleatedTxs, req.BlockData.Evidence)
 	msgShareCounts := shares.MessageShareCountsFromMessages(messages)
 
 	// calculate the indexes that will be used for each message
 	_, indexes := shares.MsgSharesUsedNIDefaults(contigousShareCount, int(squareSize), msgShareCounts...)
 
-	// wrap the malleated txs with their message's starting position
-	wrappedMalleatedTxs, err := malleatedTxs.export(indexes)
+	wrappedMalleatedTxs, err := malleatedTxs.wrap(indexes)
 	if err != nil {
 		// todo handle
 	}
@@ -58,26 +67,13 @@ func (app *App) PrepareProposal(req abci.RequestPrepareProposal) abci.ResponsePr
 		panic(err)
 	}
 
-	var evd coretypes.EvidenceData
-	err = evd.FromProto(&req.BlockData.Evidence)
-	if err != nil {
-		panic(err)
-	}
-
 	dataSquare, err := shares.Split(coreData)
 	if err != nil {
 		// todo: handle this panic even tho it should never get hit.
 		panic(err)
 	}
 
-	// encode the parsed transactions to the share format and create the
-	// protobuf encoded equivalent version of this block data. MsgWirePayForData
-	// txs are malleated into MsgPayForData txs during this process. The
-	// malleated txs are wrapped with meta data to indicate their position in
-	// the square and the hash of the original wire tx. When writing messages to
-	// the data square, we follow the non-interactive default rules to ensure
-	// that the malleated payment txs (MsgPayForData) have a corresponding data
-	// blob (message) in the same square.
+	fmt.Println(len(dataSquare))
 
 	// erasure the data square which we use to create the data root.
 	eds, err := da.ExtendShares(squareSize, dataSquare)
@@ -90,9 +86,10 @@ func (app *App) PrepareProposal(req abci.RequestPrepareProposal) abci.ResponsePr
 		panic(err)
 	}
 
-	// create the new data root by creating merkle roots of each row and col of
-	// the erasure data.
+	// create the new data root by creating the data availability header (merkle
+	// roots of each row and col of the erasure data).
 	dah := da.NewDataAvailabilityHeader(eds)
+
 	// We use the block data struct to pass the square size and calculated data
 	// root to tendermint.
 	blockData.Hash = dah.Hash()
