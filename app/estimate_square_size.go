@@ -8,7 +8,8 @@ import (
 	"github.com/celestiaorg/celestia-app/pkg/shares"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/tendermint/tendermint/pkg/consts"
-	coretypes "github.com/tendermint/tendermint/proto/tendermint/types"
+	core "github.com/tendermint/tendermint/proto/tendermint/types"
+	coretypes "github.com/tendermint/tendermint/types"
 )
 
 // prune removes txs until the set of txs will fit in the square of size
@@ -56,9 +57,44 @@ func prune(txConf client.TxConfig, txs []*parsedTx, currentShareCount, squareSiz
 	return txs[:len(txs)-removedTxs]
 }
 
+// calculateContigShares calculates the exact number of contiguous shares used.
+func calculateContigShareCount(txs []*parsedTx, evd core.EvidenceList) int {
+	txSplitter, evdSplitter := shares.NewContiguousShareSplitter(consts.TxNamespaceID), shares.NewContiguousShareSplitter(consts.EvidenceNamespaceID)
+	var err error
+	for _, tx := range txs {
+		rawTx := tx.rawTx
+		if tx.malleatedTx != nil {
+			rawTx, err = coretypes.WrapMalleatedTx(tx.originalHash(), 1, rawTx)
+			// we should never get to this point, but just in case we do, we
+			// catch the error here on purpose as we want to ignore txs that are
+			// invalid (cannot be wrapped)
+			if err != nil {
+				continue
+			}
+		}
+		txSplitter.WriteTx(rawTx)
+	}
+	for _, e := range evd.Evidence {
+		evidence, err := coretypes.EvidenceFromProto(&e)
+		if err != nil {
+			panic(err)
+		}
+		evdSplitter.WriteEvidence(evidence)
+	}
+	txCount, available := txSplitter.Count()
+	if available > 0 {
+		txCount++
+	}
+	evdCount, available := evdSplitter.Count()
+	if available > 0 {
+		evdCount++
+	}
+	return txCount + evdCount
+}
+
 // estimateSquareSize uses the provided block data to estimate the square size
 // assuming that all malleated txs follow the non interactive default rules.
-func estimateSquareSize(txs []*parsedTx, evd coretypes.EvidenceList) (uint64, int) {
+func estimateSquareSize(txs []*parsedTx, evd core.EvidenceList) (uint64, int) {
 	// get the raw count of shares taken by each type of block data
 	txShares, evdShares, msgLens := rawShareCount(txs, evd)
 	msgShares := 0
@@ -100,7 +136,7 @@ func estimateSquareSize(txs []*parsedTx, evd coretypes.EvidenceList) (uint64, in
 
 // rawShareCount calculates the number of shares taken by all of the included
 // txs, evidence, and each msg.
-func rawShareCount(txs []*parsedTx, evd coretypes.EvidenceList) (txShares, evdShares int, msgLens []int) {
+func rawShareCount(txs []*parsedTx, evd core.EvidenceList) (txShares, evdShares int, msgLens []int) {
 	// msgSummary is used to keep track fo the size and the namespace so that we
 	// can sort the namespaces before returning.
 	type msgSummary struct {

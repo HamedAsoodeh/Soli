@@ -5,6 +5,7 @@ import (
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/pkg/da"
 	core "github.com/tendermint/tendermint/proto/tendermint/types"
+	coretypes "github.com/tendermint/tendermint/types"
 )
 
 // PrepareProposal fullfills the celestia-core version of the ABCI interface by
@@ -23,17 +24,23 @@ func (app *App) PrepareProposal(req abci.RequestPrepareProposal) abci.ResponsePr
 	// squares but can only return values within the min and max square size.
 	squareSize, totalSharesUsed := estimateSquareSize(parsedTxs, req.BlockData.Evidence)
 
+	// the totalSharesUsed can be larger that the max number of shares if we
+	// reach the max square size. In this case, we must prune the deprioritized
+	// txs (and their messages if they're pfd txs).
 	if totalSharesUsed > int(squareSize*squareSize) {
 		parsedTxs = prune(app.txConfig, parsedTxs, totalSharesUsed, int(squareSize))
 	}
 
 	malleatedTxs, messages := malleateTxs(app.txConfig, squareSize, parsedTxs)
 
+	contigousShareCount := calculateContigShareCount(malleatedTxs, req.BlockData.Evidence)
+	msgShareCounts := shares.MessageShareCountsFromMessages(messages)
+
 	// calculate the indexes that will be used for each message
-	messageIndexes := []uint32{}
+	_, indexes := shares.MsgSharesUsedNIDefaults(contigousShareCount, int(squareSize), msgShareCounts...)
 
 	// wrap the malleated txs with their message's starting position
-	wrappedMalleatedTxs, err := malleatedTxs.export(messageIndexes)
+	wrappedMalleatedTxs, err := malleatedTxs.export(indexes)
 	if err != nil {
 		// todo handle
 	}
@@ -45,7 +52,23 @@ func (app *App) PrepareProposal(req abci.RequestPrepareProposal) abci.ResponsePr
 		OriginalSquareSize: squareSize,
 	}
 
-	dataSquare, err := shares.Split(blockData.ToProto())
+	coreData, err := coretypes.DataFromProto(&blockData)
+	if err != nil {
+		// todo handle
+		panic(err)
+	}
+
+	var evd coretypes.EvidenceData
+	err = evd.FromProto(&req.BlockData.Evidence)
+	if err != nil {
+		panic(err)
+	}
+
+	dataSquare, err := shares.Split(coreData)
+	if err != nil {
+		// todo: handle this panic even tho it should never get hit.
+		panic(err)
+	}
 
 	// encode the parsed transactions to the share format and create the
 	// protobuf encoded equivalent version of this block data. MsgWirePayForData

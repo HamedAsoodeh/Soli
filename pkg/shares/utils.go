@@ -4,6 +4,8 @@ import (
 	"math/bits"
 
 	"github.com/tendermint/tendermint/pkg/consts"
+	core "github.com/tendermint/tendermint/proto/tendermint/types"
+	coretypes "github.com/tendermint/tendermint/types"
 )
 
 // DelimLen calculates the length of the delimiter for a given message size
@@ -22,4 +24,50 @@ func MsgSharesUsed(msgSize int) int {
 		shareCount++
 	}
 	return shareCount
+}
+
+func MessageShareCountsFromMessages(msgs []*core.Message) []int {
+	e := make([]int, len(msgs))
+	for i, msg := range msgs {
+		e[i] = MsgSharesUsed(len(msg.Data))
+	}
+	return e
+}
+
+func MessagesToProto(msgs []coretypes.Message) []*core.Message {
+	protoMsgs := make([]*core.Message, len(msgs))
+	for i, msg := range msgs {
+		protoMsgs[i] = &core.Message{
+			NamespaceId: msg.NamespaceID,
+			Data:        msg.Data,
+		}
+	}
+	return protoMsgs
+}
+
+func MessagesFromProto(msgs []*core.Message) []coretypes.Message {
+	protoMsgs := make([]coretypes.Message, len(msgs))
+	for i, msg := range msgs {
+		protoMsgs[i] = coretypes.Message{
+			NamespaceID: msg.NamespaceId,
+			Data:        msg.Data,
+		}
+	}
+	return protoMsgs
+}
+
+func TxsToBytes(txs coretypes.Txs) [][]byte {
+	e := make([][]byte, len(txs))
+	for i, tx := range txs {
+		e[i] = []byte(tx)
+	}
+	return e
+}
+
+func TxsFromBytes(txs [][]byte) coretypes.Txs {
+	e := make(coretypes.Txs, len(txs))
+	for i, tx := range txs {
+		e[i] = coretypes.Tx(tx)
+	}
+	return e
 }

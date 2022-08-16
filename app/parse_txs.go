@@ -47,11 +47,11 @@ func (p *parsedTx) message() *core.Message {
 
 type parsedTxs []*parsedTx
 
-func (p parsedTxs) export(indexes []uint32) ([]coretypes.Tx, error) {
+func (p parsedTxs) export(indexes []uint32) ([][]byte, error) {
 	if p.countMalleated() != len(indexes) {
 		return nil, errors.New("mismatched number of indexes and malleated txs")
 	}
-	exported := make([]coretypes.Tx, len(p))
+	exported := make([][]byte, len(p))
 	counter := 0
 	for i, ptx := range p {
 		if ptx.malleatedTx == nil {
@@ -85,7 +85,7 @@ func (p parsedTxs) remove(i int) parsedTxs {
 	}
 	copy(p[i:], p[i+1:])
 	p[len(p)-1] = nil
-	return p[:len(p)-1]
+	return p[:len(p)]
 }
 
 // parseTxs decodes raw tendermint txs along with checking if they contain any

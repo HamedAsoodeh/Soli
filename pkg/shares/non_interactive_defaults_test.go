@@ -33,7 +33,8 @@ func TestMsgSharesUsedNIDefaults(t *testing.T) {
 		{1024, consts.MaxSquareSize, 32, []int{32}},
 	}
 	for i, tt := range tests {
-		res := MsgSharesUsedNIDefaults(tt.cursor, tt.squareSize, tt.msgLens...)
+		// todo add tests for the indexes
+		res, _ := MsgSharesUsedNIDefaults(tt.cursor, tt.squareSize, tt.msgLens...)
 		assert.Equal(t, tt.expected, res, fmt.Sprintf("test %d: cursor %d, squareSize %d", i, tt.cursor, tt.squareSize))
 	}
 }

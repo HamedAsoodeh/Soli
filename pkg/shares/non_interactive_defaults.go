@@ -20,11 +20,12 @@ func SplitMessagesUsingNIDefaults(cursor, origSquareSize int, msgs []coretypes.M
 		if row > origSquareSize {
 			return nil, nil, errors.New("failure to split messages: square size too small")
 		}
-		nextCursor, _ := NextAlignedPowerOfTwo(cursor, len(msg.Data), origSquareSize)
+		msgShares := MsgSharesUsed(len(msg.Data))
+		nextCursor, _ := NextAlignedPowerOfTwo(cursor, msgShares, origSquareSize)
 		splitter.WriteNamespacedPaddedShares(nextCursor - cursor)
 		splitter.Write(msg)
 		indexes = append(indexes, uint32(nextCursor))
-		cursor = nextCursor + MsgSharesUsed(len(msg.Data))
+		cursor = nextCursor + msgShares
 	}
 	return splitter.Export().RawShares(), indexes, nil
 }
@@ -39,20 +40,22 @@ func FitsInSquare(cursor, origSquareSize int, msgShareLens ...int) bool {
 	if len(msgShareLens) == 0 && cursor/origSquareSize <= origSquareSize {
 		return true
 	}
-	sharesUsed := MsgSharesUsedNIDefaults(cursor, origSquareSize, msgShareLens...)
+	sharesUsed, _ := MsgSharesUsedNIDefaults(cursor, origSquareSize, msgShareLens...)
 	return cursor+sharesUsed <= origSquareSize*origSquareSize
 }
 
 // MsgSharesUsedNIDefaults calculates the number of shares used by a given set
 // of messages share lengths. It follows the non-interactive default rules and
 // assumes that each msg length in msgShareLens
-func MsgSharesUsedNIDefaults(cursor, origSquareSize int, msgShareLens ...int) int {
+func MsgSharesUsedNIDefaults(cursor, origSquareSize int, msgShareLens ...int) (int, []uint32) {
 	start := cursor
+	indexes := make([]uint32, len(msgShareLens))
 	for _, msgLen := range msgShareLens {
+		indexes = append(indexes, uint32(cursor))
 		cursor, _ = NextAlignedPowerOfTwo(cursor, msgLen, origSquareSize)
 		cursor += msgLen
 	}
-	return cursor - start
+	return cursor - start, indexes
 }
 
 // NextAlignedPowerOfTwo calculates the next index in a row that is an aligned
