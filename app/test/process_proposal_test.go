@@ -2,11 +2,13 @@ package app_test
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"math/big"
 	"testing"
 
 	"github.com/celestiaorg/celestia-app/app"
 	"github.com/celestiaorg/celestia-app/app/encoding"
+	"github.com/celestiaorg/celestia-app/pkg/shares"
 	"github.com/celestiaorg/celestia-app/testutil"
 	"github.com/celestiaorg/celestia-app/testutil/testtxs"
 	"github.com/celestiaorg/celestia-app/x/payment/types"
@@ -39,8 +41,8 @@ func TestMessageInclusionCheck(t *testing.T) {
 	// block with all messages included
 	validData := core.Data{
 		Txs: [][]byte{
-			buildTx(t, signer, encConf.TxConfig, firstValidPFD),
-			buildTx(t, signer, encConf.TxConfig, secondValidPFD),
+			buildTx(t, signer, encConf.TxConfig, firstValidPFD, 4),
+			buildTx(t, signer, encConf.TxConfig, secondValidPFD, 4),
 		},
 		Messages: core.Messages{
 			MessagesList: []*core.Message{
@@ -60,8 +62,8 @@ func TestMessageInclusionCheck(t *testing.T) {
 	// block with a missing message
 	missingMessageData := core.Data{
 		Txs: [][]byte{
-			buildTx(t, signer, encConf.TxConfig, firstValidPFD),
-			buildTx(t, signer, encConf.TxConfig, secondValidPFD),
+			buildTx(t, signer, encConf.TxConfig, firstValidPFD, 4),
+			buildTx(t, signer, encConf.TxConfig, secondValidPFD, 4),
 		},
 		Messages: core.Messages{
 			MessagesList: []*core.Message{
@@ -77,8 +79,8 @@ func TestMessageInclusionCheck(t *testing.T) {
 	// block with all messages included, but the commitment is changed
 	invalidData := core.Data{
 		Txs: [][]byte{
-			buildTx(t, signer, encConf.TxConfig, firstValidPFD),
-			buildTx(t, signer, encConf.TxConfig, secondValidPFD),
+			buildTx(t, signer, encConf.TxConfig, firstValidPFD, 4),
+			buildTx(t, signer, encConf.TxConfig, secondValidPFD, 4),
 		},
 		Messages: core.Messages{
 			MessagesList: []*core.Message{
@@ -98,7 +100,7 @@ func TestMessageInclusionCheck(t *testing.T) {
 	// block with all messages included
 	extraMessageData := core.Data{
 		Txs: [][]byte{
-			buildTx(t, signer, encConf.TxConfig, firstValidPFD),
+			buildTx(t, signer, encConf.TxConfig, firstValidPFD, 4),
 		},
 		Messages: core.Messages{
 			MessagesList: []*core.Message{
@@ -151,13 +153,11 @@ func TestMessageInclusionCheck(t *testing.T) {
 		data, err := coretypes.DataFromProto(tt.input.BlockData)
 		require.NoError(t, err)
 
-		shares, _, err := data.ComputeShares(tt.input.BlockData.OriginalSquareSize)
+		shares, err := shares.Split(data)
 		require.NoError(t, err)
 
-		rawShares := shares.RawShares()
-
 		require.NoError(t, err)
-		eds, err := da.ExtendShares(tt.input.BlockData.OriginalSquareSize, rawShares)
+		eds, err := da.ExtendShares(tt.input.BlockData.OriginalSquareSize, shares)
 		require.NoError(t, err)
 		dah := da.NewDataAvailabilityHeader(eds)
 		tt.input.Header.DataHash = dah.Hash()
@@ -191,7 +191,7 @@ func TestProcessMessagesWithReservedNamespaces(t *testing.T) {
 		input := abci.RequestProcessProposal{
 			BlockData: &core.Data{
 				Txs: [][]byte{
-					buildTx(t, signer, encConf.TxConfig, pfd),
+					buildTx(t, signer, encConf.TxConfig, pfd, 4),
 				},
 				Messages: core.Messages{
 					MessagesList: []*core.Message{
@@ -232,7 +232,7 @@ func TestProcessMessageWithParityShareNamespaces(t *testing.T) {
 	input := abci.RequestProcessProposal{
 		BlockData: &core.Data{
 			Txs: [][]byte{
-				buildTx(t, signer, encConf.TxConfig, pfd),
+				buildTx(t, signer, encConf.TxConfig, pfd, 4),
 			},
 			Messages: core.Messages{
 				MessagesList: []*core.Message{
@@ -272,12 +272,16 @@ func genRandMsgPayForDataForNamespace(t *testing.T, signer *types.KeyringSigner,
 	return &pfd, message
 }
 
-func buildTx(t *testing.T, signer *types.KeyringSigner, txCfg client.TxConfig, msg sdk.Msg) []byte {
+func buildTx(t *testing.T, signer *types.KeyringSigner, txCfg client.TxConfig, msg sdk.Msg, shareIndex uint32) []byte {
 	tx, err := signer.BuildSignedTx(signer.NewTxBuilder(), msg)
 	require.NoError(t, err)
 
 	rawTx, err := txCfg.TxEncoder()(tx)
 	require.NoError(t, err)
+
+	h := sha256.Sum256(rawTx)
+
+	coretypes.WrapMalleatedTx(h[:], shareIndex, rawTx)
 
 	return rawTx
 }

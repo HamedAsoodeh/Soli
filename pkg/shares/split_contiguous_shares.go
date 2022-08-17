@@ -144,6 +144,9 @@ func (csw *ContiguousShareSplitter) Export() NamespacedShares {
 
 // Count returns the current number of shares that will be made if exporting.
 func (csw *ContiguousShareSplitter) Count() (count, availableBytes int) {
+	if len(csw.pendingShare.Share) > consts.NamespaceSize {
+		return len(csw.shares), 0
+	}
 	availableBytes = consts.TxShareSize - (len(csw.pendingShare.Share) - consts.NamespaceSize)
 	return len(csw.shares), availableBytes
 }

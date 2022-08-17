@@ -50,8 +50,8 @@ func FitsInSquare(cursor, origSquareSize int, msgShareLens ...int) bool {
 func MsgSharesUsedNIDefaults(cursor, origSquareSize int, msgShareLens ...int) (int, []uint32) {
 	start := cursor
 	indexes := make([]uint32, len(msgShareLens))
-	for _, msgLen := range msgShareLens {
-		indexes = append(indexes, uint32(cursor))
+	for i, msgLen := range msgShareLens {
+		indexes[i] = uint32(cursor)
 		cursor, _ = NextAlignedPowerOfTwo(cursor, msgLen, origSquareSize)
 		cursor += msgLen
 	}

@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"math"
 	"sort"
 
 	"github.com/celestiaorg/celestia-app/pkg/appconsts"
@@ -64,7 +65,7 @@ func calculateContigShareCount(txs []*parsedTx, evd core.EvidenceList) int {
 	for _, tx := range txs {
 		rawTx := tx.rawTx
 		if tx.malleatedTx != nil {
-			rawTx, err = coretypes.WrapMalleatedTx(tx.originalHash(), 1, rawTx)
+			rawTx, err = coretypes.WrapMalleatedTx(tx.originalHash(), 1, tx.malleatedTx)
 			// we should never get to this point, but just in case we do, we
 			// catch the error here on purpose as we want to ignore txs that are
 			// invalid (cannot be wrapped)
@@ -94,6 +95,7 @@ func calculateContigShareCount(txs []*parsedTx, evd core.EvidenceList) int {
 
 // estimateSquareSize uses the provided block data to estimate the square size
 // assuming that all malleated txs follow the non interactive default rules.
+// todo: get rid of the second shares used int as its not used atm
 func estimateSquareSize(txs []*parsedTx, evd core.EvidenceList) (uint64, int) {
 	// get the raw count of shares taken by each type of block data
 	txShares, evdShares, msgLens := rawShareCount(txs, evd)
@@ -106,7 +108,7 @@ func estimateSquareSize(txs []*parsedTx, evd core.EvidenceList) (uint64, int) {
 
 	// calculate the smallest possible square size that could contian all the
 	// messages
-	squareSize := nextPowerOfTwo(totalShares)
+	squareSize := nextPowerOfTwo(int(math.Ceil(math.Sqrt(float64(totalShares)))))
 	// the starting square size should be the minimum
 	if squareSize < consts.MinSquareSize {
 		squareSize = int(consts.MinSquareSize)
@@ -160,7 +162,7 @@ func rawShareCount(txs []*parsedTx, evd core.EvidenceList) (txShares, evdShares 
 
 		// if the there is a malleated tx, then we want to also account for the
 		// txs that gets included onchain TODO: improve
-		txBytes += appconsts.MalleatedTxBytes + len(pTx.rawTx) - len(pTx.msg.Message) - ((len(pTx.msg.MessageShareCommitment) - 1) * 128)
+		txBytes += calculateMalleatedTxSize(len(pTx.rawTx), len(pTx.msg.Message), len(pTx.msg.MessageShareCommitment))
 
 		msgSummaries = append(msgSummaries, msgSummary{shares.MsgSharesUsed(int(pTx.msg.MessageSize)), pTx.msg.MessageNameSpaceId})
 	}
@@ -193,6 +195,15 @@ func rawShareCount(txs []*parsedTx, evd core.EvidenceList) (txShares, evdShares 
 	}
 
 	return txShares, evdShares, msgShares
+}
+
+// todo: add test to make sure that we change this each time something changes from payForData
+func calculateMalleatedTxSize(txLen, msgLen, sharesCommitments int) int {
+	// the malleated tx uses meta data from the original tx, but removes the
+	// message and extra share commitments. Only a single share commitment will
+	// make it on chain, and the square size (uint64) is removed.
+	malleatedTxLen := txLen - msgLen - ((sharesCommitments - 1) * 128) - 8
+	return appconsts.MalleatedTxBytes + malleatedTxLen
 }
 
 func nextPowerOfTwo(v int) int {

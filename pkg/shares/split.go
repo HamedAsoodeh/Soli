@@ -2,7 +2,6 @@ package shares
 
 import (
 	"errors"
-	"sort"
 
 	"github.com/tendermint/tendermint/pkg/consts"
 	coretypes "github.com/tendermint/tendermint/types"
@@ -18,31 +17,48 @@ var (
 )
 
 func Split(data coretypes.Data) ([][]byte, error) {
-	shares := SplitTxs(data.Txs)
+	if data.OriginalSquareSize == 0 || !powerOf2(data.OriginalSquareSize) {
+		return nil, errors.New("square size is not a power of two")
+	}
+	wantShareCount := int(data.OriginalSquareSize * data.OriginalSquareSize)
+	currentShareCount := 0
+
+	txShares := SplitTxs(data.Txs)
+	currentShareCount += len(txShares)
 
 	evdShares, err := SplitEvidence(data.Evidence.Evidence)
 	if err != nil {
 		return nil, err
 	}
-	shares = append(shares, evdShares...)
+	currentShareCount += len(evdShares)
 
 	msgIndexes := ExtractShareIndexes(data.Txs)
 	if len(msgIndexes) != len(data.Messages.MessagesList) {
 		return nil, ErrIncorrectNumberOfIndexes
 	}
-	if len(msgIndexes) == 0 {
-		return shares, nil
-	}
-	if int(msgIndexes[0]) != len(shares) {
-		return nil, ErrUnexpectedFirstMessageShareIndex
+
+	var msgShares [][]byte
+	if len(msgIndexes) != 0 {
+		if int(msgIndexes[0]) != currentShareCount {
+			return nil, ErrUnexpectedFirstMessageShareIndex
+		}
+
+		msgShares, err = SplitMessages(msgIndexes, data.Messages.MessagesList)
+		if err != nil {
+			return nil, err
+		}
+		currentShareCount += len(msgShares)
 	}
 
-	msgShares, err := SplitMessages(msgIndexes, data.Messages.MessagesList)
-	if err != nil {
-		return nil, err
-	}
+	tailShares := TailPaddingShares(wantShareCount - currentShareCount).RawShares()
 
-	shares = append(shares, msgShares...)
+	// todo: optimize using a predefined slice
+	shares := append(append(append(
+		txShares,
+		evdShares...),
+		msgShares...),
+		tailShares...)
+
 	return shares, nil
 }
 
@@ -54,10 +70,6 @@ func ExtractShareIndexes(txs coretypes.Txs) []uint32 {
 		}
 	}
 
-	sort.Slice(msgIndexes, func(i, j int) bool {
-		return msgIndexes[i] < msgIndexes[j]
-	},
-	)
 	return msgIndexes
 }
 
@@ -88,10 +100,9 @@ func SplitMessages(indexes []uint32, msgs []coretypes.Message) ([][]byte, error)
 	writer := NewMessageShareSplitter()
 	for i, msg := range msgs {
 		writer.Write(msg)
-		if indexes != nil {
-			writer.WriteNamespacedPaddedShares(writer.Count() - int(indexes[i+1]))
+		if indexes != nil && len(indexes) > i+1 {
+			writer.WriteNamespacedPaddedShares(int(indexes[i+1]) - writer.Count())
 		}
-
 	}
 	return writer.Export().RawShares(), nil
 }

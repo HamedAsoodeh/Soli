@@ -12,7 +12,7 @@ func malleateTxs(txConf client.TxConfig, squareSize uint64, txs parsedTxs) (pars
 	var err error
 	var msgs []*core.Message
 	for i, pTx := range txs {
-		if pTx.malleatedTx != nil {
+		if pTx.msg != nil {
 			err = pTx.malleate(txConf, squareSize)
 			if err != nil {
 				txs.remove(i)

@@ -49,6 +49,13 @@ func TestFitsInSquare(t *testing.T) {
 	}
 	tests := []test{
 		{
+			name:  "1 msgs size 2 shares (2 msg shares, 2 contiguous, size 4)",
+			msgs:  []int{2},
+			start: 2,
+			size:  4,
+			fits:  true,
+		},
+		{
 			name:  "10 msgs size 10 shares (100 msg shares, 0 contiguous, size 4)",
 			msgs:  []int{10, 10, 10, 10, 10, 10, 10, 10, 10, 10},
 			start: 0,

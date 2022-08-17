@@ -1,7 +1,8 @@
 package app
 
 import (
-	"fmt"
+	"bytes"
+	"sort"
 
 	"github.com/celestiaorg/celestia-app/pkg/shares"
 	abci "github.com/tendermint/tendermint/abci/types"
@@ -19,7 +20,8 @@ import (
 // to tendermint via the blockdata.
 func (app *App) PrepareProposal(req abci.RequestPrepareProposal) abci.ResponsePrepareProposal {
 	// parse the txs, extracting any MsgWirePayForData and performing basic
-	// validation for each transaction. Invalid txs are ignored.
+	// validation for each transaction. Invalid txs are ignored. Original order
+	// of the txs is maintained.
 	parsedTxs := parseTxs(app.txConfig, req.BlockData.Txs)
 
 	// estimate the square size. This estimation errors on the side of larger
@@ -38,6 +40,9 @@ func (app *App) PrepareProposal(req abci.RequestPrepareProposal) abci.ResponsePr
 	// the new sdk.Msg with the original tx's metadata (sequence number, gas
 	// price etc).
 	malleatedTxs, messages := malleateTxs(app.txConfig, squareSize, parsedTxs)
+	sort.SliceStable(messages, func(i, j int) bool {
+		return bytes.Compare(messages[i].NamespaceId, messages[j].NamespaceId) < 0
+	})
 
 	// the malleated transactions still need to be wrapped with the starting
 	// share index of the message, which we still need to calculate. Here we
@@ -45,10 +50,8 @@ func (app *App) PrepareProposal(req abci.RequestPrepareProposal) abci.ResponsePr
 	// data in order to get an accurate index.
 	contigousShareCount := calculateContigShareCount(malleatedTxs, req.BlockData.Evidence)
 	msgShareCounts := shares.MessageShareCountsFromMessages(messages)
-
 	// calculate the indexes that will be used for each message
 	_, indexes := shares.MsgSharesUsedNIDefaults(contigousShareCount, int(squareSize), msgShareCounts...)
-
 	wrappedMalleatedTxs, err := malleatedTxs.wrap(indexes)
 	if err != nil {
 		// todo handle
@@ -72,8 +75,6 @@ func (app *App) PrepareProposal(req abci.RequestPrepareProposal) abci.ResponsePr
 		// todo: handle this panic even tho it should never get hit.
 		panic(err)
 	}
-
-	fmt.Println(len(dataSquare))
 
 	// erasure the data square which we use to create the data root.
 	eds, err := da.ExtendShares(squareSize, dataSquare)

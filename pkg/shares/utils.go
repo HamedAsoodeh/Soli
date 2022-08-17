@@ -34,6 +34,13 @@ func MessageShareCountsFromMessages(msgs []*core.Message) []int {
 	return e
 }
 
+func powerOf2(v uint64) bool {
+	if v&(v-1) == 0 && v != 0 {
+		return true
+	}
+	return false
+}
+
 func MessagesToProto(msgs []coretypes.Message) []*core.Message {
 	protoMsgs := make([]*core.Message, len(msgs))
 	for i, msg := range msgs {
