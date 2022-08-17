@@ -4,6 +4,7 @@ import (
 	"bytes"
 
 	"github.com/celestiaorg/celestia-app/app/encoding"
+	"github.com/celestiaorg/celestia-app/pkg/shares"
 	"github.com/celestiaorg/celestia-app/x/payment/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	abci "github.com/tendermint/tendermint/abci/types"
@@ -108,7 +109,7 @@ func (app *App) ProcessProposal(req abci.RequestProcessProposal) abci.ResponsePr
 		}
 	}
 
-	shares, _, err := data.ComputeShares(req.BlockData.OriginalSquareSize)
+	dataSquare, err := shares.Split(data)
 	if err != nil {
 		app.Logger().Error(rejectedPropBlockLog, "reason", "failure to compute shares from block data:", "error", err)
 		return abci.ResponseProcessProposal{
@@ -116,7 +117,7 @@ func (app *App) ProcessProposal(req abci.RequestProcessProposal) abci.ResponsePr
 		}
 	}
 
-	eds, err := da.ExtendShares(req.BlockData.OriginalSquareSize, shares.RawShares())
+	eds, err := da.ExtendShares(req.BlockData.OriginalSquareSize, dataSquare)
 	if err != nil {
 		app.Logger().Error(
 			rejectedPropBlockLog,
