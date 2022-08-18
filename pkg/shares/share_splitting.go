@@ -2,6 +2,7 @@ package shares
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/tendermint/tendermint/pkg/consts"
 	coretypes "github.com/tendermint/tendermint/types"
@@ -9,7 +10,7 @@ import (
 
 var (
 	ErrIncorrectNumberOfIndexes = errors.New(
-		"number of malleated transations is not identical to the number of wrapped transactions",
+		"number of malleated transactions is not identical to the number of wrapped transactions",
 	)
 	ErrUnexpectedFirstMessageShareIndex = errors.New(
 		"the first message started at an unexpected index",
@@ -18,7 +19,7 @@ var (
 
 func Split(data coretypes.Data) ([][]byte, error) {
 	if data.OriginalSquareSize == 0 || !powerOf2(data.OriginalSquareSize) {
-		return nil, errors.New("square size is not a power of two")
+		return nil, fmt.Errorf("square size is not a power of two: %d", data.OriginalSquareSize)
 	}
 	wantShareCount := int(data.OriginalSquareSize * data.OriginalSquareSize)
 	currentShareCount := 0
@@ -32,23 +33,21 @@ func Split(data coretypes.Data) ([][]byte, error) {
 	}
 	currentShareCount += len(evdShares)
 
+	// msgIndexes will be nil if we are working with a list of txs that do not
+	// have a msg index. this preserves backwards compatibility with old blocks
+	// that do not follow the non-interactive defaults
 	msgIndexes := ExtractShareIndexes(data.Txs)
-	if len(msgIndexes) != len(data.Messages.MessagesList) {
-		return nil, ErrIncorrectNumberOfIndexes
-	}
 
 	var msgShares [][]byte
-	if len(msgIndexes) != 0 {
-		if int(msgIndexes[0]) != currentShareCount {
-			return nil, ErrUnexpectedFirstMessageShareIndex
-		}
-
-		msgShares, err = SplitMessages(msgIndexes, data.Messages.MessagesList)
-		if err != nil {
-			return nil, err
-		}
-		currentShareCount += len(msgShares)
+	if msgIndexes != nil && int(msgIndexes[0]) != currentShareCount {
+		return nil, ErrUnexpectedFirstMessageShareIndex
 	}
+
+	msgShares, err = SplitMessages(msgIndexes, data.Messages.MessagesList)
+	if err != nil {
+		return nil, err
+	}
+	currentShareCount += len(msgShares)
 
 	tailShares := TailPaddingShares(wantShareCount - currentShareCount).RawShares()
 
@@ -62,10 +61,23 @@ func Split(data coretypes.Data) ([][]byte, error) {
 	return shares, nil
 }
 
+// ExtractShareIndexes iterates over the transactions and extracts the share
+// indexes from wrapped transactions. It returns nil if the transactions are
+// from an old block that did not have share indexes in the wrapped txs.
 func ExtractShareIndexes(txs coretypes.Txs) []uint32 {
-	msgIndexes := []uint32{}
+	var msgIndexes []uint32
 	for _, rawTx := range txs {
 		if malleatedTx, isMalleated := coretypes.UnwrapMalleatedTx(rawTx); isMalleated {
+			// Since share index == 0 is invalid, it indicates that we are
+			// attempting to extract share indexes from txs that do not have any
+			// due to them being old. here we return nil to indicate that we are
+			// attempting to extract indexes from a block that doesn't support
+			// it. It's check for 0 because if there is a message in the block,
+			// then there must also be a tx, which will take up at least one
+			// share.
+			if malleatedTx.ShareIndex == 0 {
+				return nil
+			}
 			msgIndexes = append(msgIndexes, malleatedTx.ShareIndex)
 		}
 	}
