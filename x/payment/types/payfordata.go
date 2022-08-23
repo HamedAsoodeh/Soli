@@ -134,7 +134,7 @@ func CreateCommitment(k uint64, namespace, message []byte) ([]byte, error) {
 
 	// split into shares that are length delimited and include the namespace in
 	// each share
-	shares, err := shares.SplitMessages(nil, msg.MessagesList)
+	shares, err := shares.SplitMessages(0, nil, msg.MessagesList)
 	if err != nil {
 		return nil, err
 	}
@@ -174,10 +174,12 @@ func CreateCommitment(k uint64, namespace, message []byte) ([]byte, error) {
 	if k == 4 {
 		fmt.Println("---------------------")
 		fmt.Println("heights", heights, "share count", len(shares))
-		fmt.Println("root count commit create", len(subTreeRoots))
+		fmt.Println("root count commit create", subTreeRoots)
 	}
-
-	return merkle.HashFromByteSlices(subTreeRoots), nil
+	// todo fix
+	out := merkle.HashFromByteSlices(subTreeRoots)
+	fmt.Println("payment out", out)
+	return out, nil
 }
 
 // powerOf2MountainRange returns the heights of the subtrees for binary merkle

@@ -43,7 +43,22 @@ func Split(data coretypes.Data) ([][]byte, error) {
 		return nil, ErrUnexpectedFirstMessageShareIndex
 	}
 
-	msgShares, err = SplitMessages(msgIndexes, data.Messages.MessagesList)
+	var padding [][]byte
+	if len(data.Messages.MessagesList) > 0 {
+		msgShareStart, _ := NextAlignedPowerOfTwo(
+			currentShareCount,
+			MsgSharesUsed(len(data.Messages.MessagesList[0].Data)),
+			int(data.OriginalSquareSize),
+		)
+		ns := consts.TxNamespaceID
+		if len(evdShares) > 0 {
+			ns = consts.EvidenceNamespaceID
+		}
+		padding = namespacedPaddedShares(ns, msgShareStart-currentShareCount).RawShares()
+	}
+	currentShareCount += len(padding)
+
+	msgShares, err = SplitMessages(currentShareCount, msgIndexes, data.Messages.MessagesList)
 	if err != nil {
 		return nil, err
 	}
@@ -52,9 +67,10 @@ func Split(data coretypes.Data) ([][]byte, error) {
 	tailShares := TailPaddingShares(wantShareCount - currentShareCount).RawShares()
 
 	// todo: optimize using a predefined slice
-	shares := append(append(append(
+	shares := append(append(append(append(
 		txShares,
 		evdShares...),
+		padding...),
 		msgShares...),
 		tailShares...)
 
@@ -105,7 +121,7 @@ func SplitEvidence(evd coretypes.EvidenceList) ([][]byte, error) {
 	return writer.Export().RawShares(), nil
 }
 
-func SplitMessages(indexes []uint32, msgs []coretypes.Message) ([][]byte, error) {
+func SplitMessages(cursor int, indexes []uint32, msgs []coretypes.Message) ([][]byte, error) {
 	if indexes != nil && len(indexes) != len(msgs) {
 		return nil, ErrIncorrectNumberOfIndexes
 	}
@@ -113,7 +129,9 @@ func SplitMessages(indexes []uint32, msgs []coretypes.Message) ([][]byte, error)
 	for i, msg := range msgs {
 		writer.Write(msg)
 		if indexes != nil && len(indexes) > i+1 {
-			writer.WriteNamespacedPaddedShares(int(indexes[i+1]) - writer.Count())
+			paddedShareCount := int(indexes[i+1]) - (writer.Count() + cursor)
+			fmt.Println("padded shares count", "msg", i, paddedShareCount, indexes)
+			writer.WriteNamespacedPaddedShares(paddedShareCount)
 		}
 	}
 	return writer.Export().RawShares(), nil

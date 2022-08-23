@@ -21,11 +21,11 @@ func TestMessageInclusion(t *testing.T) {
 		pfdCount, size int
 	}
 	tests := []test{
-		{1, 100},
+		// {1, 100},
 		{2, 100},
-		{1, 300},
-		{1, 2000},
-		{32, 10000},
+		// {1, 300},
+		// {1, 2000},
+		// {32, 10000},
 	}
 	encConf := encoding.MakeConfig(ModuleEncodingRegisters...)
 	signer := generateKeyringSigner(t, "msg-inclusion-key")
@@ -42,8 +42,13 @@ func TestMessageInclusion(t *testing.T) {
 		require.NoError(t, err)
 
 		dah := da.NewDataAvailabilityHeader(eds)
+		fmt.Println("message used according to shits", shares.MsgSharesUsed(len(data.Messages.MessagesList[0].Data)))
+		for i, r := range eds.Row(0) {
+			fmt.Println(i, r[:45])
+		}
 
 		indexes := shares.ExtractShareIndexes(data.Txs)
+		fmt.Println("indexes ^^^^^^^^^^^^^^6", indexes)
 
 		pfds := []*types.MsgPayForData{}
 		for _, tx := range data.Txs {
@@ -59,12 +64,17 @@ func TestMessageInclusion(t *testing.T) {
 			}
 		}
 
-		t.Run(fmt.Sprintf("test %d: pfd count %d size %d", tti, tt.pfdCount, tt.pfdCount), func(t *testing.T) {
+		fmt.Println("eds eds eds eds eds eds")
+		// fmt.Println(eds.Row(1)[0])
+		fmt.Println("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+
+		t.Run(fmt.Sprintf("test %d: pfd count %d size %d", tti, tt.pfdCount, tt.size), func(t *testing.T) {
 			for i, indx := range indexes {
 				msgSharesUsed := shares.MsgSharesUsed(len(data.Messages.MessagesList[i].Data))
 				fmt.Println("shares used during test", msgSharesUsed)
 				commit, err := inclusion.GetCommit(cacher, dah, int(indx), msgSharesUsed)
 				require.NoError(t, err)
+				fmt.Println("comparing", pfds[i].MessageShareCommitment, commit)
 				assert.Equal(t, pfds[i].MessageShareCommitment, commit)
 			}
 		})

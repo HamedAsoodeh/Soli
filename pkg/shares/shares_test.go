@@ -391,7 +391,7 @@ func Test_parseMsgShares(t *testing.T) {
 			msgs := coretypes.Messages{MessagesList: rawmsgs}
 			msgs.SortMessages()
 
-			shares, _ := SplitMessages(nil, msgs.MessagesList)
+			shares, _ := SplitMessages(0, nil, msgs.MessagesList)
 
 			parsedMsgs, err := parseMsgShares(shares)
 			if err != nil {
@@ -408,7 +408,7 @@ func Test_parseMsgShares(t *testing.T) {
 		// run the same tests using randomly sized messages with caps of tc.msgSize
 		t.Run(fmt.Sprintf("%s randomly sized", tc.name), func(t *testing.T) {
 			msgs := generateRandomlySizedMessages(tc.msgCount, tc.msgSize)
-			shares, _ := SplitMessages(nil, msgs.MessagesList)
+			shares, _ := SplitMessages(0, nil, msgs.MessagesList)
 
 			parsedMsgs, err := parseMsgShares(shares)
 			if err != nil {
@@ -557,7 +557,7 @@ func generateRandomNamespacedShares(count, msgSize int) [][]byte {
 		}
 	}
 
-	shares, _ = SplitMessages(nil, msgs)
+	shares, _ = SplitMessages(0, nil, msgs)
 
 	return shares
 }

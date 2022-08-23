@@ -21,6 +21,7 @@ func GetCommit(cacher *EDSSubTreeRootCacher, dah da.DataAvailabilityHeader, star
 		// here we prepend false (walk left down the tree) because we only need
 		// the commits to the original square
 		orignalSquarePath := append(append(make([]bool, 0, len(path.instructions)+1), false), path.instructions...)
+		fmt.Println("original square paths", orignalSquarePath)
 		commit, err := cacher.GetSubTreeRoot(dah, path.row, orignalSquarePath)
 		if err != nil {
 			return nil, err
@@ -29,6 +30,9 @@ func GetCommit(cacher *EDSSubTreeRootCacher, dah da.DataAvailabilityHeader, star
 
 	}
 	fmt.Println("when getting commit ---------------------***")
-	fmt.Println("&^%", originalSquareSize, paths, len(commits))
-	return merkle.HashFromByteSlices(commits), nil
+	fmt.Println("&^%", originalSquareSize, paths, commits)
+	// todo fix
+	commitOUt := merkle.HashFromByteSlices(commits)
+	fmt.Println("commit out", commitOUt)
+	return commitOUt, nil
 }
