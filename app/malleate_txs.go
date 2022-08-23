@@ -1,16 +1,33 @@
 package app
 
 import (
+	"bytes"
 	"errors"
+	"sort"
 
+	"github.com/celestiaorg/celestia-app/pkg/shares"
 	"github.com/celestiaorg/celestia-app/x/payment/types"
 	"github.com/cosmos/cosmos-sdk/client"
 	core "github.com/tendermint/tendermint/proto/tendermint/types"
 )
 
-func malleateTxs(txConf client.TxConfig, squareSize uint64, txs parsedTxs) (parsedTxs, []*core.Message) {
+func malleateTxs(
+	txConf client.TxConfig,
+	squareSize uint64,
+	txs parsedTxs,
+	evd core.EvidenceList,
+) ([][]byte, []*core.Message, error) {
+	// trackedMessage keeps track of the pfd from which it was malleated from so
+	// that we can wrap that pfd with appropriate share index
+	type trackedMessage struct {
+		message     *core.Message
+		parsedIndex int
+	}
+
+	// malleate any malleable txs while also keeping track of the original order
+	// and tagging the resulting messages with a reverse index.
 	var err error
-	var msgs []*core.Message
+	var trackedMsgs []trackedMessage
 	for i, pTx := range txs {
 		if pTx.msg != nil {
 			err = pTx.malleate(txConf, squareSize)
@@ -18,10 +35,52 @@ func malleateTxs(txConf client.TxConfig, squareSize uint64, txs parsedTxs) (pars
 				txs.remove(i)
 				continue
 			}
-			msgs = append(msgs, pTx.message())
+			trackedMsgs = append(trackedMsgs, trackedMessage{message: pTx.message(), parsedIndex: i})
 		}
 	}
-	return txs, msgs
+
+	// sort the messages so that we can create a data square whose messages are
+	// ordered by namespace. This is a block validity rule, and will cause nmt
+	// to panic.
+	sort.SliceStable(trackedMsgs, func(i, j int) bool {
+		return bytes.Compare(trackedMsgs[i].message.NamespaceId, trackedMsgs[j].message.NamespaceId) < 0
+	})
+
+	// split the tracked messagse apart now that we know the order of the indexes
+	msgs := make([]*core.Message, len(trackedMsgs))
+	parsedTxReverseIndexes := make([]int, len(trackedMsgs))
+	for i, tMsg := range trackedMsgs {
+		msgs[i] = tMsg.message
+		parsedTxReverseIndexes[i] = tMsg.parsedIndex
+	}
+
+	// the malleated transdactions still need to be wrapped with the starting
+	// share index of the message, which we still need to calculate. Here we
+	// calculate the exact share counts used by the different tyeps of block
+	// data in order to get an accurate index.
+	contigousShareCount := calculateContigShareCount(txs, evd)
+	msgShareCounts := shares.MessageShareCountsFromMessages(msgs)
+	// calculate the indexes that will be used for each message
+	_, indexes := shares.MsgSharesUsedNIDefaults(contigousShareCount, int(squareSize), msgShareCounts...)
+	for i, reverseIndex := range parsedTxReverseIndexes {
+		wrappedMalleatedTx, err := txs[reverseIndex].wrap(indexes[i])
+		if err != nil {
+			return nil, nil, err
+		}
+		txs[reverseIndex].malleatedTx = wrappedMalleatedTx
+	}
+
+	// bring together the malleated and non malleated txs
+	processedTxs := make([][]byte, len(txs))
+	for i, t := range txs {
+		if t.malleatedTx != nil {
+			processedTxs[i] = t.malleatedTx
+		} else {
+			processedTxs[i] = t.rawTx
+		}
+	}
+
+	return processedTxs, msgs, err
 }
 
 func (p *parsedTx) malleate(txConf client.TxConfig, squareSize uint64) error {

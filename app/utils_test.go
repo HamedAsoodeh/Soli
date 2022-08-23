@@ -2,11 +2,9 @@ package app
 
 import (
 	"bytes"
-	"sort"
 	"testing"
 
 	"github.com/celestiaorg/celestia-app/app/encoding"
-	"github.com/celestiaorg/celestia-app/pkg/shares"
 	"github.com/celestiaorg/celestia-app/x/payment/types"
 	"github.com/celestiaorg/nmt/namespace"
 	"github.com/cosmos/cosmos-sdk/client"
@@ -37,22 +35,11 @@ func generateValidBlockData(
 		parsedTxs = prune(txConfig, parsedTxs, totalSharesUsed, int(squareSize))
 	}
 
-	malleatedTxs, messages := malleateTxs(txConfig, squareSize, parsedTxs)
-
-	sort.SliceStable(messages, func(i, j int) bool {
-		return bytes.Compare(messages[i].NamespaceId, messages[j].NamespaceId) < 0
-	})
-
-	contigousShareCount := calculateContigShareCount(malleatedTxs, core.EvidenceList{})
-	msgShareCounts := shares.MessageShareCountsFromMessages(messages)
-	_, indexes := shares.MsgSharesUsedNIDefaults(contigousShareCount, int(squareSize), msgShareCounts...)
-	wrappedMalleatedTxs, err := malleatedTxs.wrap(indexes)
-	if err != nil {
-		return coretypes.Data{}, err
-	}
+	processedTxs, messages, err := malleateTxs(txConfig, squareSize, parsedTxs, core.EvidenceList{})
+	require.NoError(t, err)
 
 	blockData := core.Data{
-		Txs:                wrappedMalleatedTxs,
+		Txs:                processedTxs,
 		Evidence:           core.EvidenceList{},
 		Messages:           core.Messages{MessagesList: messages},
 		OriginalSquareSize: squareSize,

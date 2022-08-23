@@ -171,15 +171,8 @@ func CreateCommitment(k uint64, namespace, message []byte) ([]byte, error) {
 		// add the root
 		subTreeRoots[i] = tree.Root()
 	}
-	if k == 4 {
-		fmt.Println("---------------------")
-		fmt.Println("heights", heights, "share count", len(shares))
-		fmt.Println("root count commit create", subTreeRoots)
-	}
-	// todo fix
-	out := merkle.HashFromByteSlices(subTreeRoots)
-	fmt.Println("payment out", out)
-	return out, nil
+
+	return merkle.HashFromByteSlices(subTreeRoots), nil
 }
 
 // powerOf2MountainRange returns the heights of the subtrees for binary merkle

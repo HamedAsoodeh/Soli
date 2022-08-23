@@ -1,9 +1,6 @@
 package app
 
 import (
-	"bytes"
-	"sort"
-
 	"github.com/celestiaorg/celestia-app/pkg/shares"
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/pkg/da"
@@ -39,30 +36,13 @@ func (app *App) PrepareProposal(req abci.RequestPrepareProposal) abci.ResponsePr
 	// MsgPayForData and their repsective messages. The malleatedTxs contain the
 	// the new sdk.Msg with the original tx's metadata (sequence number, gas
 	// price etc).
-	malleatedTxs, messages := malleateTxs(app.txConfig, squareSize, parsedTxs)
-
-	// sort the messages so that we can create a data square whose messages are
-	// ordered by namespace. This is a block validity rule, and will cause nmt
-	// to panic.
-	sort.SliceStable(messages, func(i, j int) bool {
-		return bytes.Compare(messages[i].NamespaceId, messages[j].NamespaceId) < 0
-	})
-
-	// the malleated transdactions still need to be wrapped with the starting
-	// share index of the message, which we still need to calculate. Here we
-	// calculate the exact share counts used by the different tyeps of block
-	// data in order to get an accurate index.
-	contigousShareCount := calculateContigShareCount(malleatedTxs, req.BlockData.Evidence)
-	msgShareCounts := shares.MessageShareCountsFromMessages(messages)
-	// calculate the indexes that will be used for each message
-	_, indexes := shares.MsgSharesUsedNIDefaults(contigousShareCount, int(squareSize), msgShareCounts...)
-	wrappedMalleatedTxs, err := malleatedTxs.wrap(indexes)
+	processedTxs, messages, err := malleateTxs(app.txConfig, squareSize, parsedTxs, req.BlockData.Evidence)
 	if err != nil {
 		panic(err)
 	}
 
 	blockData := core.Data{
-		Txs:                wrappedMalleatedTxs,
+		Txs:                processedTxs,
 		Evidence:           req.BlockData.Evidence,
 		Messages:           core.Messages{MessagesList: messages},
 		OriginalSquareSize: squareSize,

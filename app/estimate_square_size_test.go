@@ -57,11 +57,25 @@ func Test_contiguousShareCount(t *testing.T) {
 	for _, tt := range tests {
 		txs := generateManyRawWirePFD(t, encConf.TxConfig, signer, tt.wPFDCount, tt.messgeSize)
 		parsedTxs := parseTxs(encConf.TxConfig, txs)
-		mTxs, _ := malleateTxs(encConf.TxConfig, 32, parsedTxs)
-		calculatedTxShareCount := calculateContigShareCount(mTxs, core.EvidenceList{})
-		wrapped, err := mTxs.wrap([]uint32{1, 2, 3, 4, 5})
-		require.NoError(t, err)
-		txShares := shares.SplitTxs(shares.TxsFromBytes(wrapped))
+		// malleate any malleable txs while also keeping track of the original order
+		// and tagging the resulting messages with a reverse index.
+		var err error
+		rawTxs := make([][]byte, len(parsedTxs))
+		for i, pTx := range parsedTxs {
+			if pTx.msg != nil {
+				err = pTx.malleate(encConf.TxConfig, 32)
+				require.NoError(t, err)
+				wt, err := pTx.wrap(1)
+				require.NoError(t, err)
+				rawTxs[i] = wt
+			} else {
+				rawTxs[i] = pTx.rawTx
+			}
+		}
+		calculatedTxShareCount := calculateContigShareCount(parsedTxs, core.EvidenceList{})
+		// wrapped, err := parsedTxs.wrap([]uint32{1, 2, 3, 4, 5})
+		// require.NoError(t, err)
+		txShares := shares.SplitTxs(shares.TxsFromBytes(rawTxs))
 		assert.Equal(t, len(txShares), calculatedTxShareCount, tt.name)
 	}
 

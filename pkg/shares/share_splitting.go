@@ -3,6 +3,7 @@ package shares
 import (
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/tendermint/tendermint/pkg/consts"
 	coretypes "github.com/tendermint/tendermint/types"
@@ -37,6 +38,7 @@ func Split(data coretypes.Data) ([][]byte, error) {
 	// have a msg index. this preserves backwards compatibility with old blocks
 	// that do not follow the non-interactive defaults
 	msgIndexes := ExtractShareIndexes(data.Txs)
+	sort.Slice(msgIndexes, func(i, j int) bool { return msgIndexes[i] < msgIndexes[j] })
 
 	var msgShares [][]byte
 	if msgIndexes != nil && int(msgIndexes[0]) != currentShareCount {
@@ -130,7 +132,6 @@ func SplitMessages(cursor int, indexes []uint32, msgs []coretypes.Message) ([][]
 		writer.Write(msg)
 		if indexes != nil && len(indexes) > i+1 {
 			paddedShareCount := int(indexes[i+1]) - (writer.Count() + cursor)
-			fmt.Println("padded shares count", "msg", i, paddedShareCount, indexes)
 			writer.WriteNamespacedPaddedShares(paddedShareCount)
 		}
 	}
