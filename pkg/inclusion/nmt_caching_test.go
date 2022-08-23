@@ -15,7 +15,7 @@ import (
 
 func TestWalkCachedSubTreeRoot(t *testing.T) {
 	// create the first main tree
-	strc := newSubTreeRootCacher()
+	strc := newSubTreeRootCacher(8)
 	oss := uint64(8)
 	tr := wrapper.NewErasuredNamespacedMerkleTree(oss, nmt.NodeVisitor(strc.Visit))
 	d := []byte{0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 3, 4, 5, 6, 7, 8}
@@ -109,7 +109,7 @@ func TestWalkCachedSubTreeRoot(t *testing.T) {
 func TestEDSSubRootCacher(t *testing.T) {
 	oss := uint64(8)
 	d := coretestutil.GenerateRandNamespacedRawData(uint32(oss*oss), consts.NamespaceSize, consts.ShareSize-consts.NamespaceSize)
-	stc := NewCachedSubtreeCacher(oss)
+	stc := NewSubtreeCacher(oss)
 
 	eds, err := rsmt2d.ComputeExtendedDataSquare(d, consts.DefaultCodec(), stc.Constructor)
 	require.NoError(t, err)

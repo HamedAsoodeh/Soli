@@ -40,11 +40,15 @@ func (app *App) PrepareProposal(req abci.RequestPrepareProposal) abci.ResponsePr
 	// the new sdk.Msg with the original tx's metadata (sequence number, gas
 	// price etc).
 	malleatedTxs, messages := malleateTxs(app.txConfig, squareSize, parsedTxs)
+
+	// sort the messages so that we can create a data square whose messages are
+	// ordered by namespace. This is a block validity rule, and will cause nmt
+	// to panic.
 	sort.SliceStable(messages, func(i, j int) bool {
 		return bytes.Compare(messages[i].NamespaceId, messages[j].NamespaceId) < 0
 	})
 
-	// the malleated transactions still need to be wrapped with the starting
+	// the malleated transdactions still need to be wrapped with the starting
 	// share index of the message, which we still need to calculate. Here we
 	// calculate the exact share counts used by the different tyeps of block
 	// data in order to get an accurate index.
@@ -54,7 +58,7 @@ func (app *App) PrepareProposal(req abci.RequestPrepareProposal) abci.ResponsePr
 	_, indexes := shares.MsgSharesUsedNIDefaults(contigousShareCount, int(squareSize), msgShareCounts...)
 	wrappedMalleatedTxs, err := malleatedTxs.wrap(indexes)
 	if err != nil {
-		// todo handle
+		panic(err)
 	}
 
 	blockData := core.Data{

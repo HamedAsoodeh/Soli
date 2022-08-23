@@ -2,9 +2,11 @@ package app
 
 import (
 	"bytes"
+	"sort"
 	"testing"
 
 	"github.com/celestiaorg/celestia-app/app/encoding"
+	"github.com/celestiaorg/celestia-app/pkg/shares"
 	"github.com/celestiaorg/celestia-app/x/payment/types"
 	"github.com/celestiaorg/nmt/namespace"
 	"github.com/cosmos/cosmos-sdk/client"
@@ -15,7 +17,49 @@ import (
 	"github.com/stretchr/testify/require"
 	tmrand "github.com/tendermint/tendermint/libs/rand"
 	"github.com/tendermint/tendermint/pkg/consts"
+	core "github.com/tendermint/tendermint/proto/tendermint/types"
+	coretypes "github.com/tendermint/tendermint/types"
 )
+
+func generateValidBlockData(
+	t *testing.T,
+	txConfig client.TxConfig,
+	signer *types.KeyringSigner,
+	pfdCount,
+	size int,
+) (coretypes.Data, error) {
+	pfds := generateManyRawWirePFD(t, txConfig, signer, pfdCount, size)
+	parsedTxs := parseTxs(txConfig, pfds)
+
+	squareSize, totalSharesUsed := estimateSquareSize(parsedTxs, core.EvidenceList{})
+
+	if totalSharesUsed > int(squareSize*squareSize) {
+		parsedTxs = prune(txConfig, parsedTxs, totalSharesUsed, int(squareSize))
+	}
+
+	malleatedTxs, messages := malleateTxs(txConfig, squareSize, parsedTxs)
+
+	sort.SliceStable(messages, func(i, j int) bool {
+		return bytes.Compare(messages[i].NamespaceId, messages[j].NamespaceId) < 0
+	})
+
+	contigousShareCount := calculateContigShareCount(malleatedTxs, core.EvidenceList{})
+	msgShareCounts := shares.MessageShareCountsFromMessages(messages)
+	_, indexes := shares.MsgSharesUsedNIDefaults(contigousShareCount, int(squareSize), msgShareCounts...)
+	wrappedMalleatedTxs, err := malleatedTxs.wrap(indexes)
+	if err != nil {
+		return coretypes.Data{}, err
+	}
+
+	blockData := core.Data{
+		Txs:                wrappedMalleatedTxs,
+		Evidence:           core.EvidenceList{},
+		Messages:           core.Messages{MessagesList: messages},
+		OriginalSquareSize: squareSize,
+	}
+
+	return coretypes.DataFromProto(&blockData)
+}
 
 func generateManyRawWirePFD(t *testing.T, txConfig client.TxConfig, signer *types.KeyringSigner, count, size int) [][]byte {
 	txs := make([][]byte, count)

@@ -2,6 +2,7 @@ package inclusion
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/celestiaorg/nmt"
 	"github.com/celestiaorg/rsmt2d"
@@ -15,11 +16,16 @@ import (
 // map. Note: this cacher does not cache individual leaves or their hashes, only
 // inner nodes.
 type subTreeRootCacher struct {
-	cache map[string][2]string
+	cache                  map[string][2]string
+	depthCursor, posCurosr int
 }
 
-func newSubTreeRootCacher() *subTreeRootCacher {
-	return &subTreeRootCacher{cache: make(map[string][2]string)}
+func (c *subTreeRootCacher) coord() (int, int) {
+	return c.depthCursor, c.posCurosr
+}
+
+func newSubTreeRootCacher(squareSize int) *subTreeRootCacher {
+	return &subTreeRootCacher{cache: make(map[string][2]string), depthCursor: int(math.Log2(float64(squareSize * 2)))}
 }
 
 // Visit fullfills the nmt.VisitorNode function definition. It stores each inner
@@ -30,6 +36,8 @@ func (strc *subTreeRootCacher) Visit(hash []byte, children ...[]byte) {
 	case 2:
 		strc.cache[string(hash)] = [2]string{string(children[0]), string(children[1])}
 	case 1:
+		// todo(remove)
+		// strc.cache[string(hash)] = [2]string{string(children[0]), string(children[0])}
 		return
 	default:
 		panic("unexpected visit")
@@ -83,7 +91,7 @@ type EDSSubTreeRootCacher struct {
 	counter int
 }
 
-func NewCachedSubtreeCacher(squareSize uint64) *EDSSubTreeRootCacher {
+func NewSubtreeCacher(squareSize uint64) *EDSSubTreeRootCacher {
 	return &EDSSubTreeRootCacher{
 		caches:     []*subTreeRootCacher{},
 		squareSize: squareSize,
@@ -99,7 +107,7 @@ func (stc *EDSSubTreeRootCacher) Constructor() rsmt2d.Tree {
 	var newTree wrapper.ErasuredNamespacedMerkleTree
 	switch stc.counter % 2 {
 	case 0:
-		strc := newSubTreeRootCacher()
+		strc := newSubTreeRootCacher(int(stc.squareSize))
 		stc.caches = append(stc.caches, strc)
 		newTree = wrapper.NewErasuredNamespacedMerkleTree(stc.squareSize, nmt.NodeVisitor(strc.Visit))
 	default:
@@ -122,4 +130,10 @@ func (stc *EDSSubTreeRootCacher) GetSubTreeRoot(dah da.DataAvailabilityHeader, r
 		return nil, fmt.Errorf(rowOutOfBoundsErr, len(stc.caches), row)
 	}
 	return stc.caches[row].walk(dah.RowsRoots[row], path)
+}
+
+// todo delete
+func (stc *EDSSubTreeRootCacher) Debug() {
+	// for i, cache := range stc.caches {
+	// }
 }

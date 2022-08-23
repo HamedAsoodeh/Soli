@@ -1,9 +1,7 @@
 package shares
 
 import (
-	"bytes"
 	"fmt"
-	"sort"
 
 	"github.com/celestiaorg/nmt/namespace"
 	"github.com/tendermint/tendermint/pkg/consts"
@@ -36,6 +34,7 @@ func (msw *MessageShareSplitter) Write(msg coretypes.Message) {
 
 // RemoveMessage will remove a message from the underlying message state. If
 // there is namespaced padding after the message, then that is also removed.
+// todo: remove as this is unused
 func (msw *MessageShareSplitter) RemoveMessage(i int) (int, error) {
 	j := 1
 	initialCount := msw.count
@@ -56,11 +55,6 @@ func (msw *MessageShareSplitter) RemoveMessage(i int) (int, error) {
 	copy(msw.shares[i:], msw.shares[i+j:])
 	msw.shares = msw.shares[:len(msw.shares)-j]
 	return initialCount - msw.count, nil
-}
-
-func (msw *MessageShareSplitter) Defrag(i, squareSize int) {
-	// remove each message as needed
-	// we need to remove the padding for all message starting at index i and ending when a row is already full
 }
 
 // WriteNamespacedPaddedShares adds empty shares using the namespace of the last written share.
@@ -89,14 +83,6 @@ func (msw *MessageShareSplitter) Export() NamespacedShares {
 		}
 	}
 	return shares
-}
-
-// note: as an optimization we can probably get rid of this if we just add
-// checks each time we write.
-func (msw *MessageShareSplitter) sortMsgs() {
-	sort.SliceStable(msw.shares, func(i, j int) bool {
-		return bytes.Compare(msw.shares[i][0].ID, msw.shares[j][0].ID) < 0
-	})
 }
 
 // Count returns the current number of shares that will be made if exporting.
