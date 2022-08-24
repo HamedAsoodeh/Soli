@@ -3,11 +3,13 @@ package app
 import (
 	"bytes"
 
-	"github.com/celestiaorg/celestia-app/app/encoding"
+	"github.com/celestiaorg/celestia-app/pkg/inclusion"
 	"github.com/celestiaorg/celestia-app/pkg/shares"
 	"github.com/celestiaorg/celestia-app/x/payment/types"
+	"github.com/celestiaorg/rsmt2d"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	abci "github.com/tendermint/tendermint/abci/types"
+	"github.com/tendermint/tendermint/pkg/consts"
 	"github.com/tendermint/tendermint/pkg/da"
 	coretypes "github.com/tendermint/tendermint/types"
 )
@@ -21,85 +23,6 @@ func (app *App) ProcessProposal(req abci.RequestProcessProposal) abci.ResponsePr
 	//  - each MsgPayForData included in a block should have a corresponding data also in the block body
 	//  - the commitment in each PFD should match that of its corresponding data
 	//  - there should be no unpaid-for data
-
-	// extract the commitments from any MsgPayForDatas in the block
-	commitments := make(map[string]struct{})
-	// we have a separate counter so that identical data also get counted
-	// also see https://github.com/celestiaorg/celestia-app/issues/226
-	commitmentCounter := 0
-	for _, rawTx := range req.BlockData.Txs {
-		tx, err := encoding.MalleatedTxDecoder(app.txConfig.TxDecoder())(rawTx)
-		if err != nil {
-			continue
-		}
-
-		for _, msg := range tx.GetMsgs() {
-			if sdk.MsgTypeURL(msg) != types.URLMsgPayForData {
-				continue
-			}
-
-			pfd, ok := msg.(*types.MsgPayForData)
-			if !ok {
-				app.Logger().Error("Msg type does not match MsgPayForData URL")
-				continue
-			}
-
-			commitments[string(pfd.MessageShareCommitment)] = struct{}{}
-			commitmentCounter++
-		}
-	}
-
-	// quickly compare the number of PFDs and messages, if they aren't
-	// identical, then  we already know this block is invalid
-	if commitmentCounter != len(req.BlockData.Messages.MessagesList) {
-		app.Logger().Error(
-			rejectedPropBlockLog,
-			"reason",
-			"varying number of messages and payForData txs in the same block",
-		)
-		return abci.ResponseProcessProposal{
-			Result: abci.ResponseProcessProposal_REJECT,
-		}
-	}
-
-	// iterate through all of the messages and ensure that a PFD with the exact
-	// commitment exists
-	for _, msg := range req.BlockData.Messages.MessagesList {
-		if err := types.ValidateMessageNamespaceID(msg.NamespaceId); err != nil {
-			app.Logger().Error(
-				rejectedPropBlockLog,
-				"reason",
-				"found a message that uses an invalid namespace id",
-				"error",
-				err.Error(),
-			)
-			return abci.ResponseProcessProposal{
-				Result: abci.ResponseProcessProposal_REJECT,
-			}
-		}
-
-		commit, err := types.CreateCommitment(req.BlockData.OriginalSquareSize, msg.NamespaceId, msg.Data)
-		if err != nil {
-			app.Logger().Error(
-				rejectedPropBlockLog,
-				"reason",
-				"failure to create commitment for included message",
-				"error",
-				err.Error(),
-			)
-			return abci.ResponseProcessProposal{
-				Result: abci.ResponseProcessProposal_REJECT,
-			}
-		}
-
-		// TODO: refactor to actually check for subtree roots instead of simply inclusion see issues #382 and #383
-		if _, has := commitments[string(commit)]; !has {
-			app.Logger().Info(rejectedPropBlockLog, "reason", "missing MsgPayForData for included message")
-			return abci.ResponseProcessProposal{
-				Result: abci.ResponseProcessProposal_REJECT,
-			}
-		}
-	}
 
 	data, err := coretypes.DataFromProto(req.BlockData)
 	if err != nil {
@@ -117,7 +40,8 @@ func (app *App) ProcessProposal(req abci.RequestProcessProposal) abci.ResponsePr
 		}
 	}
 
-	eds, err := da.ExtendShares(req.BlockData.OriginalSquareSize, dataSquare)
+	cacher := inclusion.NewSubtreeCacher(data.OriginalSquareSize)
+	eds, err := rsmt2d.ComputeExtendedDataSquare(dataSquare, consts.DefaultCodec(), cacher.Constructor)
 	if err != nil {
 		app.Logger().Error(
 			rejectedPropBlockLog,
@@ -138,6 +62,65 @@ func (app *App) ProcessProposal(req abci.RequestProcessProposal) abci.ResponsePr
 			rejectedPropBlockLog,
 			"reason",
 			"proposed data root differs from calculated data root",
+		)
+		return abci.ResponseProcessProposal{
+			Result: abci.ResponseProcessProposal_REJECT,
+		}
+	}
+
+	commitmentCounter := 0
+	for _, rawTx := range req.BlockData.Txs {
+		malleatedTx, isMalleated := coretypes.UnwrapMalleatedTx(rawTx)
+		if !isMalleated {
+			continue
+		}
+
+		tx, err := app.txConfig.TxDecoder()(malleatedTx.Tx)
+		if err != nil {
+			// todo: probably reject this block
+			continue
+		}
+
+		for _, msg := range tx.GetMsgs() {
+			if sdk.MsgTypeURL(msg) != types.URLMsgPayForData {
+				continue
+			}
+
+			pfd, ok := msg.(*types.MsgPayForData)
+			if !ok {
+				app.Logger().Error("Msg type does not match MsgPayForData URL")
+				continue
+			}
+
+			commitment, err := inclusion.GetCommit(cacher, dah, int(malleatedTx.ShareIndex), shares.MsgSharesUsed(pfd.Size()))
+			if err != nil {
+				// todo reject block?
+				continue
+			}
+
+			if !bytes.Equal(pfd.MessageShareCommitment, commitment) {
+				// todo: create a message inclusion proof
+				app.Logger().Error(
+					rejectedPropBlockLog,
+					"reason",
+					"commitment not found",
+				)
+				return abci.ResponseProcessProposal{
+					Result: abci.ResponseProcessProposal_REJECT,
+				}
+			}
+
+			commitmentCounter++
+		}
+	}
+
+	// quickly compare the number of PFDs and messages, if they aren't
+	// identical, then  we already know this block is invalid
+	if commitmentCounter != len(req.BlockData.Messages.MessagesList) {
+		app.Logger().Error(
+			rejectedPropBlockLog,
+			"reason",
+			"varying number of messages and payForData txs in the same block",
 		)
 		return abci.ResponseProcessProposal{
 			Result: abci.ResponseProcessProposal_REJECT,

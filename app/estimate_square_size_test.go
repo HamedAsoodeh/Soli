@@ -73,8 +73,6 @@ func Test_contiguousShareCount(t *testing.T) {
 			}
 		}
 		calculatedTxShareCount := calculateContigShareCount(parsedTxs, core.EvidenceList{})
-		// wrapped, err := parsedTxs.wrap([]uint32{1, 2, 3, 4, 5})
-		// require.NoError(t, err)
 		txShares := shares.SplitTxs(shares.TxsFromBytes(rawTxs))
 		assert.Equal(t, len(txShares), calculatedTxShareCount, tt.name)
 	}

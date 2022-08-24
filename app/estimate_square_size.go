@@ -83,11 +83,11 @@ func calculateContigShareCount(txs []*parsedTx, evd core.EvidenceList) int {
 		evdSplitter.WriteEvidence(evidence)
 	}
 	txCount, available := txSplitter.Count()
-	if available > 0 {
+	if consts.TxShareSize-available > 0 {
 		txCount++
 	}
 	evdCount, available := evdSplitter.Count()
-	if available > 0 {
+	if consts.TxShareSize-available > 0 {
 		evdCount++
 	}
 	return txCount + evdCount
