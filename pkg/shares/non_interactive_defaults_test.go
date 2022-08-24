@@ -5,37 +5,42 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/tendermint/tendermint/pkg/consts"
 )
 
 func TestMsgSharesUsedNIDefaults(t *testing.T) {
 	type test struct {
 		cursor, squareSize, expected int
 		msgLens                      []int
+		indexes                      []uint32
 	}
 	tests := []test{
-		{0, 8, 8, []int{8}},
-		{0, 8, 7, []int{7}},
-		{0, 8, 7, []int{3, 3}},
-		{1, 8, 8, []int{3, 3}},
-		{1, 8, 32, []int{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}},
-		{3, 8, 16, []int{5, 7}},
-		{0, 8, 29, []int{5, 5, 5, 5}},
-		{0, 8, 10, []int{10}},
-		{0, 8, 26, []int{10, 10}},
-		{1, 8, 33, []int{10, 10}},
-		{2, 8, 32, []int{10, 10}},
-		{0, 8, 55, []int{21, 31}},
-		{0, 8, 128, []int{64, 64}},
-		{0, consts.MaxSquareSize, 1000, []int{1000}},
-		{0, consts.MaxSquareSize, consts.MaxSquareSize + 1, []int{consts.MaxSquareSize + 1}},
-		{1, consts.MaxSquareSize, (consts.MaxSquareSize * 4) - 1, []int{consts.MaxSquareSize, consts.MaxSquareSize, consts.MaxSquareSize}},
-		{1024, consts.MaxSquareSize, 32, []int{32}},
+		{2, 4, 1, []int{1}, []uint32{2}},
+		{2, 2, 1, []int{1}, []uint32{2}},
+		{3, 4, 8, []int{3, 3}, []uint32{4, 8}},
+		// {0, 8, 8, []int{8}, },
+		// {0, 8, 7, []int{7}},
+		// {0, 8, 7, []int{3, 3}},
+		// {1, 8, 8, []int{3, 3}},
+		// {1, 8, 32, []int{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}},
+		// {3, 8, 16, []int{5, 7}},
+		// {0, 8, 29, []int{5, 5, 5, 5}},
+		// {0, 8, 10, []int{10}},
+		// {0, 8, 26, []int{10, 10}},
+		// {1, 8, 33, []int{10, 10}},
+		// {2, 8, 32, []int{10, 10}},
+		// {0, 8, 55, []int{21, 31}},
+		// {0, 8, 128, []int{64, 64}},
+		// {0, consts.MaxSquareSize, 1000, []int{1000}},
+		// {0, consts.MaxSquareSize, consts.MaxSquareSize + 1, []int{consts.MaxSquareSize + 1}},
+		// {1, consts.MaxSquareSize, (consts.MaxSquareSize * 4) - 1, []int{consts.MaxSquareSize, consts.MaxSquareSize, consts.MaxSquareSize}},
+		// {1024, consts.MaxSquareSize, 32, []int{32}},
 	}
 	for i, tt := range tests {
 		// todo add tests for the indexes
-		res, _ := MsgSharesUsedNIDefaults(tt.cursor, tt.squareSize, tt.msgLens...)
-		assert.Equal(t, tt.expected, res, fmt.Sprintf("test %d: cursor %d, squareSize %d", i, tt.cursor, tt.squareSize))
+		res, indexes := MsgSharesUsedNIDefaults(tt.cursor, tt.squareSize, tt.msgLens...)
+		test := fmt.Sprintf("test %d: cursor %d, squareSize %d", i, tt.cursor, tt.squareSize)
+		assert.Equal(t, tt.expected, res, test)
+		assert.Equal(t, tt.indexes, indexes, test)
 	}
 }
 

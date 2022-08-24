@@ -40,11 +40,6 @@ func Split(data coretypes.Data) ([][]byte, error) {
 	msgIndexes := ExtractShareIndexes(data.Txs)
 	sort.Slice(msgIndexes, func(i, j int) bool { return msgIndexes[i] < msgIndexes[j] })
 
-	var msgShares [][]byte
-	if msgIndexes != nil && int(msgIndexes[0]) != currentShareCount {
-		return nil, ErrUnexpectedFirstMessageShareIndex
-	}
-
 	var padding [][]byte
 	if len(data.Messages.MessagesList) > 0 {
 		msgShareStart, _ := NextAlignedPowerOfTwo(
@@ -59,6 +54,11 @@ func Split(data coretypes.Data) ([][]byte, error) {
 		padding = namespacedPaddedShares(ns, msgShareStart-currentShareCount).RawShares()
 	}
 	currentShareCount += len(padding)
+
+	var msgShares [][]byte
+	if msgIndexes != nil && int(msgIndexes[0]) != currentShareCount {
+		return nil, ErrUnexpectedFirstMessageShareIndex
+	}
 
 	msgShares, err = SplitMessages(currentShareCount, msgIndexes, data.Messages.MessagesList)
 	if err != nil {

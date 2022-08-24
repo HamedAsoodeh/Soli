@@ -25,7 +25,5 @@ func GetCommit(cacher *EDSSubTreeRootCacher, dah da.DataAvailabilityHeader, star
 		commits[i] = commit
 
 	}
-	// todo fix
-	commitOUt := merkle.HashFromByteSlices(commits)
-	return commitOUt, nil
+	return merkle.HashFromByteSlices(commits), nil
 }

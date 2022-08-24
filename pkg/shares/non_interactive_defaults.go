@@ -51,8 +51,8 @@ func MsgSharesUsedNIDefaults(cursor, origSquareSize int, msgShareLens ...int) (i
 	start := cursor
 	indexes := make([]uint32, len(msgShareLens))
 	for i, msgLen := range msgShareLens {
-		indexes[i] = uint32(cursor)
 		cursor, _ = NextAlignedPowerOfTwo(cursor, msgLen, origSquareSize)
+		indexes[i] = uint32(cursor)
 		cursor += msgLen
 	}
 	return cursor - start, indexes

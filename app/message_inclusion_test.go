@@ -21,11 +21,15 @@ func TestMessageInclusion(t *testing.T) {
 		pfdCount, size int
 	}
 	tests := []test{
-		// {1, 100},
-		// {2, 100},
-		// {1, 300},
-		// {1, 2000},
+		{1, 100},
+		{2, 100},
+		{1, 300},
+		{1, 2000},
 		{2, 600},
+		{10, 1000},
+		{20, 2000},
+		{10, 16134},
+		{1, 900000},
 	}
 	encConf := encoding.MakeConfig(ModuleEncodingRegisters...)
 	signer := generateKeyringSigner(t, "msg-inclusion-key")
