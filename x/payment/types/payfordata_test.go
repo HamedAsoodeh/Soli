@@ -39,6 +39,11 @@ func TestMountainRange(t *testing.T) {
 			k:        128,
 			expected: []uint64{128, 128, 2, 1},
 		},
+		{
+			l:        252,
+			k:        128,
+			expected: []uint64{128, 64, 32, 16, 8, 4},
+		},
 	}
 	for _, tt := range tests {
 		res := powerOf2MountainRange(tt.l, tt.k)

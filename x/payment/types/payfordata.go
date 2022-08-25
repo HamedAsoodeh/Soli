@@ -134,7 +134,7 @@ func CreateCommitment(k uint64, namespace, message []byte) ([]byte, error) {
 
 	// split into shares that are length delimited and include the namespace in
 	// each share
-	shares, err := shares.SplitMessages(0, nil, msg.MessagesList)
+	rawshares, err := shares.SplitMessages(0, nil, msg.MessagesList)
 	if err != nil {
 		return nil, err
 	}
@@ -143,18 +143,20 @@ func CreateCommitment(k uint64, namespace, message []byte) ([]byte, error) {
 	// note, we use k*k-1 here because at least a single share will be reserved
 	// for the transaction paying for the message, therefore the max number of
 	// shares a message can be is number of shares in square -1.
-	if uint64(len(shares)) > (k*k)-1 {
-		return nil, fmt.Errorf("message size exceeds max shares for square size %d: max %d taken %d", k, (k*k)-1, len(shares))
+	if uint64(len(rawshares)) > (k*k)-1 {
+		return nil, fmt.Errorf("message size exceeds max shares for square size %d: max %d taken %d", k, (k*k)-1, len(rawshares))
 	}
 
 	// organize shares for merkle mountain range
-	heights := powerOf2MountainRange(uint64(len(shares)), k)
+	heights := powerOf2MountainRange(uint64(len(rawshares)), k)
 	leafSets := make([][][]byte, len(heights))
 	cursor := uint64(0)
 	for i, height := range heights {
-		leafSets[i] = shares[cursor : cursor+height]
+		leafSets[i] = rawshares[cursor : cursor+height]
 		cursor = cursor + height
 	}
+
+	// there are diferent heights/number of commtiments
 
 	// create the commits by pushing each leaf set onto an nmt
 	subTreeRoots := make([][]byte, len(leafSets))

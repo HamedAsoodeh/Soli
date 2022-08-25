@@ -1,7 +1,7 @@
 package shares
 
 import (
-	"math/bits"
+	"encoding/binary"
 
 	"github.com/tendermint/tendermint/pkg/consts"
 	core "github.com/tendermint/tendermint/proto/tendermint/types"
@@ -10,7 +10,9 @@ import (
 
 // DelimLen calculates the length of the delimiter for a given message size
 func DelimLen(x uint64) int {
-	return 8 - bits.LeadingZeros64(x)%8
+	lenBuf := make([]byte, binary.MaxVarintLen64)
+	n := binary.PutUvarint(lenBuf, x)
+	return n
 }
 
 // MsgSharesUsed calculates the minimum number of shares a message will take up.

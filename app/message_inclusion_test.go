@@ -21,24 +21,24 @@ func TestMessageInclusion(t *testing.T) {
 		pfdCount, normalTxCount, size int
 	}
 	tests := []test{
-		// {1, 0, 100},
-		// {2, 0, 100},
-		// {1, 0, 300},
-		// {1, 0, 2000},
-		// {2, 0, 600},
-		// {10, 0, 1000},
-		// {20, 0, 2000},
-		// {10, 0, 16134},
-		// {1, 0, 900000},
-		// {1, 1, 100},
-		// {2, 10, 100},
-		// {1, 10, 300},
-		// {1, 10, 2000},
-		// {2, 20, 600},
-		// {10, 20, 1000},
-		// {20, 10, 2000},
-		// {10, 10, 16134},
-		// {1, 10, 900000},
+		{1, 0, 100},
+		{2, 0, 100},
+		{1, 0, 300},
+		{1, 0, 2000},
+		{2, 0, 600},
+		{10, 0, 1000},
+		{20, 0, 2000},
+		{10, 0, 16134},
+		{1, 0, 900000},
+		{1, 1, 100},
+		{2, 10, 100},
+		{1, 10, 300},
+		{1, 10, 2000},
+		{2, 20, 600},
+		{10, 20, 1000},
+		{20, 10, 2000},
+		{10, 10, 16134},
+		{1, 10, 900000},
 		{1, 0, 62244},
 	}
 	encConf := encoding.MakeConfig(ModuleEncodingRegisters...)
@@ -50,11 +50,6 @@ func TestMessageInclusion(t *testing.T) {
 		require.NoError(t, err)
 
 		squareSize := uint64(math.Sqrt(float64(len(dataSquare))))
-
-		fmt.Println("square size", squareSize)
-		// for _, s := range dataSquare {
-		// 	fmt.Println(s[:100])
-		// }
 
 		cacher := inclusion.NewSubtreeCacher(squareSize)
 		eds, err := rsmt2d.ComputeExtendedDataSquare(dataSquare, consts.DefaultCodec(), cacher.Constructor)

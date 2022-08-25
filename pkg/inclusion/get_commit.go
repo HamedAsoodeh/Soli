@@ -2,7 +2,6 @@ package inclusion
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/tendermint/tendermint/crypto/merkle"
 	"github.com/tendermint/tendermint/pkg/da"
@@ -14,10 +13,8 @@ func GetCommit(cacher *EDSSubTreeRootCacher, dah da.DataAvailabilityHeader, star
 		return nil, errors.New("cannot get commit for message that doesn't fit in square")
 	}
 	paths := calculateCommitPaths(originalSquareSize, start, msgShareLen)
-	fmt.Println("original square size", originalSquareSize, "start", start, "msgShareLen", msgShareLen)
 	commits := make([][]byte, len(paths))
 	for i, path := range paths {
-		fmt.Println("path", path)
 		// here we prepend false (walk left down the tree) because we only need
 		// the commits to the original square
 		orignalSquarePath := append(append(make([]bool, 0, len(path.instructions)+1), false), path.instructions...)
