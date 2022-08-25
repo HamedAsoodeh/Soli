@@ -40,7 +40,7 @@ func prune(txConf client.TxConfig, txs []*parsedTx, currentShareCount, squareSiz
 		}
 	}
 
-	for i := len(txs) - 1; (removedContiguousShares + removedMessageShares) >= goal; i-- {
+	for i := len(txs) - 1; (removedContiguousShares + removedMessageShares) < goal; i-- {
 		removedTxs++
 		if txs[i].msg == nil {
 			adjustContigCursor(len(txs[i].rawTx))
@@ -55,23 +55,26 @@ func prune(txConf client.TxConfig, txs []*parsedTx, currentShareCount, squareSiz
 		adjustContigCursor(len(txs[i].malleatedTx) + appconsts.MalleatedTxBytes)
 	}
 
-	return txs[:len(txs)-removedTxs]
+	return txs[:len(txs)-(removedTxs+1)]
 }
 
 // calculateContigShares calculates the exact number of contiguous shares used.
-func calculateContigShareCount(txs []*parsedTx, evd core.EvidenceList) int {
+func calculateContigShareCount(txs []*parsedTx, evd core.EvidenceList, squareSize int) int {
 	txSplitter, evdSplitter := shares.NewContiguousShareSplitter(consts.TxNamespaceID), shares.NewContiguousShareSplitter(consts.EvidenceNamespaceID)
 	var err error
+	msgSharesCursor := len(txs)
 	for _, tx := range txs {
 		rawTx := tx.rawTx
 		if tx.malleatedTx != nil {
-			rawTx, err = coretypes.WrapMalleatedTx(tx.originalHash(), 1, tx.malleatedTx)
+			rawTx, err = coretypes.WrapMalleatedTx(tx.originalHash(), uint32(msgSharesCursor), tx.malleatedTx)
 			// we should never get to this point, but just in case we do, we
 			// catch the error here on purpose as we want to ignore txs that are
 			// invalid (cannot be wrapped)
 			if err != nil {
 				continue
 			}
+			used, _ := shares.MsgSharesUsedNIDefaults(msgSharesCursor, squareSize, tx.msg.Size())
+			msgSharesCursor += used
 		}
 		txSplitter.WriteTx(rawTx)
 	}
@@ -104,30 +107,30 @@ func estimateSquareSize(txs []*parsedTx, evd core.EvidenceList) (uint64, int) {
 		msgShares += msgLen
 	}
 
-	totalShares := txShares + evdShares + msgShares
-
 	// calculate the smallest possible square size that could contian all the
 	// messages
-	squareSize := nextPowerOfTwo(int(math.Ceil(math.Sqrt(float64(totalShares)))))
+	squareSize := nextPowerOfTwo(int(math.Ceil(math.Sqrt(float64(txShares + evdShares + msgShares)))))
+
 	// the starting square size should be the minimum
 	if squareSize < consts.MinSquareSize {
 		squareSize = int(consts.MinSquareSize)
 	}
 
+	var fits bool
 	for {
 		// assume that all the msgs in the square use the non-interactive
 		// default rules and see if we can fit them in the smallest starting
 		// square size. We start the cusor (share index) at the begginning of
 		// the message shares (txShares+evdShares), because shares that do not
 		// follow the non-interactive defaults are simple to estimate.
-		fits := shares.FitsInSquare(txShares+evdShares, squareSize, msgLens...)
+		fits, msgShares = shares.FitsInSquare(txShares+evdShares, squareSize, msgLens...)
 		switch {
 		// stop estimating if we know we can reach the max square size
 		case squareSize >= consts.MaxSquareSize:
-			return consts.MaxSquareSize, totalShares
+			return consts.MaxSquareSize, txShares + evdShares + msgShares
 		// return if we've found a square size that fits all of the txs
 		case fits:
-			return uint64(squareSize), totalShares
+			return uint64(squareSize), txShares + evdShares + msgShares
 		// try the next largest square size if we can't fit all the txs
 		case !fits:
 			// increment the square size
@@ -171,6 +174,16 @@ func rawShareCount(txs []*parsedTx, evd core.EvidenceList) (txShares, evdShares 
 	if txBytes > 0 {
 		txShares++ // add one to round up
 	}
+	// todo: stop rounding up. Here we're rounding up because the calculation for
+	// tx bytes isn't perfect. This catches those edge cases where we're we
+	// estimate the exact number of shares in the square, when in reality we're
+	// one over the number of shares in the square size. This will also cause
+	// blocks that are one square size too big instead of being perfectly snug.
+	// The estimation must be perfect or greater than what the square actually
+	// ends up being.
+	if txShares > 0 {
+		txShares++
+	}
 
 	for _, e := range evd.Evidence {
 		evdBytes += e.Size() + shares.DelimLen(uint64(e.Size()))
@@ -193,8 +206,7 @@ func rawShareCount(txs []*parsedTx, evd core.EvidenceList) (txShares, evdShares 
 	for i, summary := range msgSummaries {
 		msgShares[i] = summary.size
 	}
-
-	return txShares, evdShares, msgShares
+	return txShares + 2, evdShares, msgShares
 }
 
 // todo: add test to make sure that we change this each time something changes from payForData
@@ -203,7 +215,8 @@ func calculateMalleatedTxSize(txLen, msgLen, sharesCommitments int) int {
 	// message and extra share commitments. Only a single share commitment will
 	// make it on chain, and the square size (uint64) is removed.
 	malleatedTxLen := txLen - msgLen - ((sharesCommitments - 1) * 128) - 8
-	return appconsts.MalleatedTxBytes + malleatedTxLen
+	// todo: fix majic number 100 here
+	return appconsts.MalleatedTxBytes + 100 + malleatedTxLen
 }
 
 func nextPowerOfTwo(v int) int {

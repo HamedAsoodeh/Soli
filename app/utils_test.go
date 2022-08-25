@@ -12,6 +12,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/hd"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/stretchr/testify/require"
 	tmrand "github.com/tendermint/tendermint/libs/rand"
 	"github.com/tendermint/tendermint/pkg/consts"
@@ -24,10 +25,12 @@ func generateValidBlockData(
 	txConfig client.TxConfig,
 	signer *types.KeyringSigner,
 	pfdCount,
+	normalTxCount,
 	size int,
 ) (coretypes.Data, error) {
-	pfds := generateManyRawWirePFD(t, txConfig, signer, pfdCount, size)
-	parsedTxs := parseTxs(txConfig, pfds)
+	rawTxs := generateManyRawWirePFD(t, txConfig, signer, pfdCount, size)
+	rawTxs = append(rawTxs, generateManyRawSendTxs(t, txConfig, signer, normalTxCount)...)
+	parsedTxs := parseTxs(txConfig, rawTxs)
 
 	squareSize, totalSharesUsed := estimateSquareSize(parsedTxs, core.EvidenceList{})
 
@@ -62,6 +65,50 @@ func generateManyRawWirePFD(t *testing.T, txConfig client.TxConfig, signer *type
 		txs[i] = wpfdTx
 	}
 	return txs
+}
+
+func generateManyRawSendTxs(t *testing.T, txConfig client.TxConfig, signer *types.KeyringSigner, count int) [][]byte {
+	txs := make([][]byte, count)
+	for i := 0; i < count; i++ {
+		txs[i] = generateRawSendTx(t, txConfig, signer, 100)
+	}
+	return txs
+}
+
+// this creates send transactions meant to help test encoding/prepare/process
+// proposal, they are not meant to actually be executed by the state machine. If
+// we want that, we have to update nonce, and send funds to someone other than
+// the same account signing the transaction.
+func generateRawSendTx(t *testing.T, txConfig client.TxConfig, signer *types.KeyringSigner, amount int64) (rawTx []byte) {
+	feeCoin := sdk.Coin{
+		Denom:  BondDenom,
+		Amount: sdk.NewInt(1),
+	}
+
+	opts := []types.TxBuilderOption{
+		types.SetFeeAmount(sdk.NewCoins(feeCoin)),
+		types.SetGasLimit(1000000000),
+	}
+
+	amountCoin := sdk.Coin{
+		Denom:  BondDenom,
+		Amount: sdk.NewInt(amount),
+	}
+
+	addr, err := signer.GetSignerInfo().GetAddress()
+	require.NoError(t, err)
+
+	builder := signer.NewTxBuilder(opts...)
+
+	msg := banktypes.NewMsgSend(addr, addr, sdk.NewCoins(amountCoin))
+
+	tx, err := signer.BuildSignedTx(builder, msg)
+	require.NoError(t, err)
+
+	rawTx, err = txConfig.TxEncoder()(tx)
+	require.NoError(t, err)
+
+	return rawTx
 }
 
 // generateRawWirePFD creates a tx with a single MsgWirePayForData message using the provided namespace and message

@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"errors"
 
+	"github.com/celestiaorg/celestia-app/app/encoding"
 	"github.com/celestiaorg/celestia-app/x/payment/types"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/x/auth/signing"
@@ -94,7 +95,7 @@ func (p parsedTxs) remove(i int) parsedTxs {
 func parseTxs(conf client.TxConfig, rawTxs [][]byte) parsedTxs {
 	parsedTxs := []*parsedTx{}
 	for _, rawTx := range rawTxs {
-		tx, err := conf.TxDecoder()(rawTx)
+		tx, err := encoding.MalleatedTxDecoder(conf.TxDecoder())(rawTx)
 		if err != nil {
 			continue
 		}

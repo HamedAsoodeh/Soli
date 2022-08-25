@@ -14,7 +14,7 @@ type path struct {
 // calculateCommitPaths calculates all of the paths to subtree roots needed to
 // create the commitment for a given message.
 func calculateCommitPaths(origSquareSize, start, msgShareLen int) []path {
-	// todo: make the non-interactive defaults optional by calculating the
+	// todo: make the non-interactive defaults optional. by calculating the
 	// NextAlignedPowerOfTwo, we are forcing use of the non-interactive
 	// defaults. If we want to make this optional in the future, we have to move
 	// this next line out of this function.

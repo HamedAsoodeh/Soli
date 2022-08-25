@@ -58,7 +58,7 @@ func malleateTxs(
 	// share index of the message, which we still need to calculate. Here we
 	// calculate the exact share counts used by the different tyeps of block
 	// data in order to get an accurate index.
-	contigousShareCount := calculateContigShareCount(txs, evd)
+	contigousShareCount := calculateContigShareCount(txs, evd, int(squareSize))
 	msgShareCounts := shares.MessageShareCountsFromMessages(msgs)
 	// calculate the indexes that will be used for each message
 	_, indexes := shares.MsgSharesUsedNIDefaults(contigousShareCount, int(squareSize), msgShareCounts...)

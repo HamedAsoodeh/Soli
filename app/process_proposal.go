@@ -68,6 +68,8 @@ func (app *App) ProcessProposal(req abci.RequestProcessProposal) abci.ResponsePr
 		}
 	}
 
+	// iterate over all of the MsgPayForData transactions and ensure that they
+	// commitments are subtree roots of the data root.
 	commitmentCounter := 0
 	for _, rawTx := range req.BlockData.Txs {
 		malleatedTx, isMalleated := coretypes.UnwrapMalleatedTx(rawTx)
@@ -77,7 +79,9 @@ func (app *App) ProcessProposal(req abci.RequestProcessProposal) abci.ResponsePr
 
 		tx, err := app.txConfig.TxDecoder()(malleatedTx.Tx)
 		if err != nil {
-			// todo: probably reject this block
+			// we don't reject the block here because it is not a block validity
+			// rule that all transactions included in the block data are
+			// decodable
 			continue
 		}
 
@@ -94,8 +98,16 @@ func (app *App) ProcessProposal(req abci.RequestProcessProposal) abci.ResponsePr
 
 			commitment, err := inclusion.GetCommit(cacher, dah, int(malleatedTx.ShareIndex), shares.MsgSharesUsed(pfd.Size()))
 			if err != nil {
-				// todo reject block?
-				continue
+				app.Logger().Error(
+					rejectedPropBlockLog,
+					"reason",
+					"commitment not found",
+					"error",
+					err.Error(),
+				)
+				return abci.ResponseProcessProposal{
+					Result: abci.ResponseProcessProposal_REJECT,
+				}
 			}
 
 			if !bytes.Equal(pfd.MessageShareCommitment, commitment) {
@@ -114,7 +126,7 @@ func (app *App) ProcessProposal(req abci.RequestProcessProposal) abci.ResponsePr
 		}
 	}
 
-	// quickly compare the number of PFDs and messages, if they aren't
+	// compare the number of PFDs and messages, if they aren't
 	// identical, then  we already know this block is invalid
 	if commitmentCounter != len(req.BlockData.Messages.MessagesList) {
 		app.Logger().Error(

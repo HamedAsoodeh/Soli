@@ -56,7 +56,7 @@ func Split(data coretypes.Data) ([][]byte, error) {
 	currentShareCount += len(padding)
 
 	var msgShares [][]byte
-	if msgIndexes != nil && int(msgIndexes[0]) != currentShareCount {
+	if msgIndexes != nil && int(msgIndexes[0]) < currentShareCount {
 		return nil, ErrUnexpectedFirstMessageShareIndex
 	}
 
@@ -65,7 +65,6 @@ func Split(data coretypes.Data) ([][]byte, error) {
 		return nil, err
 	}
 	currentShareCount += len(msgShares)
-
 	tailShares := TailPaddingShares(wantShareCount - currentShareCount).RawShares()
 
 	// todo: optimize using a predefined slice
@@ -108,6 +107,7 @@ func SplitTxs(txs coretypes.Txs) [][]byte {
 	for _, tx := range txs {
 		writer.WriteTx(tx)
 	}
+
 	return writer.Export().RawShares()
 }
 

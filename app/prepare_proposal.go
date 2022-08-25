@@ -50,13 +50,11 @@ func (app *App) PrepareProposal(req abci.RequestPrepareProposal) abci.ResponsePr
 
 	coreData, err := coretypes.DataFromProto(&blockData)
 	if err != nil {
-		// todo handle
 		panic(err)
 	}
 
 	dataSquare, err := shares.Split(coreData)
 	if err != nil {
-		// todo: handle this panic even tho it should never get hit.
 		panic(err)
 	}
 

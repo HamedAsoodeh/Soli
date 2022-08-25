@@ -37,7 +37,6 @@ func TestMsgSharesUsedNIDefaults(t *testing.T) {
 		{1024, consts.MaxSquareSize, 32, []int{32}, nil},
 	}
 	for i, tt := range tests {
-		// todo add tests for the indexes
 		res, indexes := MsgSharesUsedNIDefaults(tt.cursor, tt.squareSize, tt.msgLens...)
 		test := fmt.Sprintf("test %d: cursor %d, squareSize %d", i, tt.cursor, tt.squareSize)
 		assert.Equal(t, tt.expected, res, test)
@@ -101,7 +100,7 @@ func TestFitsInSquare(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res := FitsInSquare(tt.start, tt.size, tt.msgs...)
+			res, _ := FitsInSquare(tt.start, tt.size, tt.msgs...)
 			assert.Equal(t, tt.fits, res)
 		})
 	}
@@ -178,6 +177,14 @@ func TestNextAlignedPowerOfTwo(t *testing.T) {
 			k:             16,
 			fits:          false,
 			expectedIndex: 8,
+		},
+		{
+			name:          "edge case where there are many messages with a single size",
+			cursor:        10291,
+			msgLen:        1,
+			k:             128,
+			fits:          true,
+			expectedIndex: 10291,
 		},
 	}
 	for _, tt := range tests {

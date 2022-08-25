@@ -32,31 +32,6 @@ func (msw *MessageShareSplitter) Write(msg coretypes.Message) {
 	msw.count += len(newShares)
 }
 
-// RemoveMessage will remove a message from the underlying message state. If
-// there is namespaced padding after the message, then that is also removed.
-// todo: remove as this is unused
-func (msw *MessageShareSplitter) RemoveMessage(i int) (int, error) {
-	j := 1
-	initialCount := msw.count
-	if len(msw.shares) > i+1 {
-		_, msgLen, err := ParseDelimiter(msw.shares[i+1][0].Share[consts.NamespaceSize:])
-		if err != nil {
-			return 0, err
-		}
-		// 0 means that there is padding after the share that we are about to
-		// remove. to remove this padding, we increase j by 1
-		// with the message
-		if msgLen == 0 {
-			j++
-			msw.count -= len(msw.shares[j])
-		}
-	}
-	msw.count -= len(msw.shares[i])
-	copy(msw.shares[i:], msw.shares[i+j:])
-	msw.shares = msw.shares[:len(msw.shares)-j]
-	return initialCount - msw.count, nil
-}
-
 // WriteNamespacedPaddedShares adds empty shares using the namespace of the last written share.
 // This is useful to follow the message layout rules. It assumes that at least
 // one share has already been written, if not it panics.

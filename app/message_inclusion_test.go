@@ -18,23 +18,32 @@ import (
 
 func TestMessageInclusion(t *testing.T) {
 	type test struct {
-		pfdCount, size int
+		pfdCount, normalTxCount, size int
 	}
 	tests := []test{
-		{1, 100},
-		{2, 100},
-		{1, 300},
-		{1, 2000},
-		{2, 600},
-		{10, 1000},
-		{20, 2000},
-		{10, 16134},
-		{1, 900000},
+		{1, 0, 100},
+		{2, 0, 100},
+		{1, 0, 300},
+		{1, 0, 2000},
+		{2, 0, 600},
+		{10, 0, 1000},
+		{20, 0, 2000},
+		{10, 0, 16134},
+		{1, 0, 900000},
+		{1, 1, 100},
+		{2, 10, 100},
+		{1, 10, 300},
+		{1, 10, 2000},
+		{2, 20, 600},
+		{10, 20, 1000},
+		{20, 10, 2000},
+		{10, 10, 16134},
+		{1, 10, 900000},
 	}
 	encConf := encoding.MakeConfig(ModuleEncodingRegisters...)
 	signer := generateKeyringSigner(t, "msg-inclusion-key")
 	for tti, tt := range tests {
-		data, err := generateValidBlockData(t, encConf.TxConfig, signer, tt.pfdCount, tt.size)
+		data, err := generateValidBlockData(t, encConf.TxConfig, signer, tt.pfdCount, tt.normalTxCount, tt.size)
 		require.NoError(t, err)
 		dataSquare, err := shares.Split(data)
 		require.NoError(t, err)

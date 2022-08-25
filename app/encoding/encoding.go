@@ -5,6 +5,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/std"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/auth/tx"
 )
 
@@ -20,6 +21,10 @@ type Config struct {
 	Codec             codec.Codec
 	TxConfig          client.TxConfig
 	Amino             *codec.LegacyAmino
+}
+
+func (c Config) MalleatedDecoder() sdk.TxDecoder {
+	return MalleatedTxDecoder(c.TxConfig.TxDecoder())
 }
 
 // MakeConfig creates an encoding config for the app.
