@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/celestiaorg/celestia-app/pkg/inclusion"
 	"github.com/celestiaorg/celestia-app/pkg/shares"
@@ -31,6 +32,8 @@ func (app *App) ProcessProposal(req abci.RequestProcessProposal) abci.ResponsePr
 			Result: abci.ResponseProcessProposal_REJECT,
 		}
 	}
+
+	fmt.Println("messages compared to txs", len(data.Messages.MessagesList), len(data.Txs))
 
 	dataSquare, err := shares.Split(data)
 	if err != nil {
@@ -74,6 +77,7 @@ func (app *App) ProcessProposal(req abci.RequestProcessProposal) abci.ResponsePr
 	for _, rawTx := range req.BlockData.Txs {
 		malleatedTx, isMalleated := coretypes.UnwrapMalleatedTx(rawTx)
 		if !isMalleated {
+			fmt.Println("tx was not malleated")
 			continue
 		}
 
@@ -82,11 +86,13 @@ func (app *App) ProcessProposal(req abci.RequestProcessProposal) abci.ResponsePr
 			// we don't reject the block here because it is not a block validity
 			// rule that all transactions included in the block data are
 			// decodable
+			fmt.Println("could not decode", err)
 			continue
 		}
 
 		for _, msg := range tx.GetMsgs() {
 			if sdk.MsgTypeURL(msg) != types.URLMsgPayForData {
+				fmt.Println("msg was not a pay for data")
 				continue
 			}
 
@@ -96,8 +102,22 @@ func (app *App) ProcessProposal(req abci.RequestProcessProposal) abci.ResponsePr
 				continue
 			}
 
-			commitment, err := inclusion.GetCommit(cacher, dah, int(malleatedTx.ShareIndex), shares.MsgSharesUsed(pfd.Size()))
+			if err = pfd.ValidateBasic(); err != nil {
+				app.Logger().Error(
+					rejectedPropBlockLog,
+					"reason",
+					"invalid MsgPayForData",
+					"error",
+					err.Error(),
+				)
+				return abci.ResponseProcessProposal{
+					Result: abci.ResponseProcessProposal_REJECT,
+				}
+			}
+
+			commitment, err := inclusion.GetCommit(cacher, dah, int(malleatedTx.ShareIndex), shares.MsgSharesUsed(int(pfd.MessageSize)))
 			if err != nil {
+				fmt.Println("commitment not found", err, "shares used", shares.MsgSharesUsed(int(pfd.MessageSize)))
 				app.Logger().Error(
 					rejectedPropBlockLog,
 					"reason",
@@ -111,11 +131,12 @@ func (app *App) ProcessProposal(req abci.RequestProcessProposal) abci.ResponsePr
 			}
 
 			if !bytes.Equal(pfd.MessageShareCommitment, commitment) {
+				fmt.Println("pfd and commitment do not match", "shares used", shares.MsgSharesUsed(int(pfd.MessageSize)), pfd.MessageSize)
 				// todo: create a message inclusion proof
 				app.Logger().Error(
 					rejectedPropBlockLog,
 					"reason",
-					"commitment not found",
+					"found commitment does not match user's",
 				)
 				return abci.ResponseProcessProposal{
 					Result: abci.ResponseProcessProposal_REJECT,
@@ -139,6 +160,7 @@ func (app *App) ProcessProposal(req abci.RequestProcessProposal) abci.ResponsePr
 		}
 	}
 
+	fmt.Println("ACCEPTING PROPOSAL")
 	return abci.ResponseProcessProposal{
 		Result: abci.ResponseProcessProposal_ACCEPT,
 	}

@@ -20,7 +20,7 @@ import (
 	coretypes "github.com/tendermint/tendermint/types"
 )
 
-func generateValidBlockData(
+func GenerateValidBlockData(
 	t *testing.T,
 	txConfig client.TxConfig,
 	signer *types.KeyringSigner,
@@ -33,6 +33,8 @@ func generateValidBlockData(
 	parsedTxs := parseTxs(txConfig, rawTxs)
 
 	squareSize, totalSharesUsed := estimateSquareSize(parsedTxs, core.EvidenceList{})
+
+	squareSize = 128
 
 	if totalSharesUsed > int(squareSize*squareSize) {
 		parsedTxs = prune(txConfig, parsedTxs, totalSharesUsed, int(squareSize))

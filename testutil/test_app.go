@@ -3,6 +3,7 @@ package testutil
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -81,7 +82,7 @@ func SetupTestAppWithGenesisValSet(t *testing.T) *app.App {
 	encCfg := encoding.MakeConfig(app.ModuleEncodingRegisters...)
 
 	testApp := app.New(
-		log.NewNopLogger(), db, nil, true, skipUpgradeHeights,
+		log.NewTMLogger(os.Stdout), db, nil, true, skipUpgradeHeights,
 		cast.ToString(emptyOpts.Get(flags.FlagHome)),
 		cast.ToUint(emptyOpts.Get(server.FlagInvCheckPeriod)),
 		encCfg,

@@ -6,6 +6,7 @@ import (
 
 	sdkerrors "cosmossdk.io/errors"
 	"github.com/celestiaorg/celestia-app/pkg/shares"
+	"github.com/celestiaorg/nmt/namespace"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,10 +29,15 @@ func TestMountainRange(t *testing.T) {
 			k:        64,
 			expected: []uint64{2},
 		},
-		{ // should this test throw an error? we
+		{
 			l:        64,
 			k:        8,
 			expected: []uint64{8, 8, 8, 8, 8, 8, 8, 8},
+		},
+		{
+			l:        259,
+			k:        128,
+			expected: []uint64{128, 128, 2, 1},
 		},
 	}
 	for _, tt := range tests {
@@ -308,7 +314,7 @@ func TestProcessMessage(t *testing.T) {
 
 		// ensure that the shared fields are identical
 		assert.Equal(t, tt.msg, message.Data, tt.name)
-		assert.Equal(t, tt.ns, message.NamespaceID, tt.name)
+		assert.Equal(t, namespace.ID(tt.ns), message.NamespaceID, tt.name)
 		assert.Equal(t, wpfd.Signer, spfd.Signer, tt.name)
 		assert.Equal(t, wpfd.MessageNameSpaceId, spfd.MessageNamespaceId, tt.name)
 		assert.Equal(t, wpfd.MessageShareCommitment[0].ShareCommitment, spfd.MessageShareCommitment, tt.name)
