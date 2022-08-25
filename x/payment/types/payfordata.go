@@ -2,17 +2,17 @@ package types
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
 
 	"github.com/celestiaorg/celestia-app/pkg/shares"
-	"github.com/celestiaorg/rsmt2d"
+	"github.com/celestiaorg/nmt"
 	sdkclient "github.com/cosmos/cosmos-sdk/client"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	"github.com/tendermint/tendermint/crypto/merkle"
 	"github.com/tendermint/tendermint/pkg/consts"
-	"github.com/tendermint/tendermint/pkg/wrapper"
 	coretypes "github.com/tendermint/tendermint/types"
 )
 
@@ -159,13 +159,16 @@ func CreateCommitment(k uint64, namespace, message []byte) ([]byte, error) {
 	// create the commits by pushing each leaf set onto an nmt
 	subTreeRoots := make([][]byte, len(leafSets))
 	for i, set := range leafSets {
-		tree := wrapper.NewErasuredNamespacedMerkleTree(consts.MaxSquareSize)
+		// create the nmt todo(evan) use nmt wrapper
+		tree := nmt.New(sha256.New(), nmt.NamespaceIDSize(NamespaceIDSize))
 		for _, leaf := range set {
 			nsLeaf := append(make([]byte, 0), append(namespace, leaf...)...)
-			// here we hardcode pushing as axis 0 cell 0 because we never want
-			// to add the parity namespace to our shares when we create roots.
-			tree.Push(nsLeaf, rsmt2d.SquareIndex{Axis: 0, Cell: 0})
+			err := tree.Push(nsLeaf)
+			if err != nil {
+				return nil, err
+			}
 		}
+		// add the root
 		subTreeRoots[i] = tree.Root()
 	}
 
