@@ -34,8 +34,6 @@ func GenerateValidBlockData(
 
 	squareSize, totalSharesUsed := estimateSquareSize(parsedTxs, core.EvidenceList{})
 
-	squareSize = 128
-
 	if totalSharesUsed > int(squareSize*squareSize) {
 		parsedTxs = prune(txConfig, parsedTxs, totalSharesUsed, int(squareSize))
 	}
