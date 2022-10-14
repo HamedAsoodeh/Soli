@@ -20,6 +20,23 @@ import (
 func MigrateGenesisStatev070(oldGenPath, newGenPath string) error {
 	encCfg := encoding.MakeConfig(ModuleEncodingRegisters...)
 
+	// fix the old genesis by manually adding the timeiota...
+	// var b ShitGenesis
+	// f, err := os.OpenFile(oldGenPath, os.O_RDWR, os.ModePerm)
+	// if err != nil {
+	// 	return err
+	// }
+	// err = json.NewDecoder(f).Decode(&b)
+	// if err != nil {
+	// 	return err
+	// }
+	// b.ConsensusParams.Block.TimeIotaMs = 1000
+	// err = json.NewEncoder(f).Encode(b)
+	// if err != nil {
+	// 	return err
+	// }
+	// f.Close()
+
 	doc, err := types.GenesisDocFromFile(oldGenPath)
 	if err != nil {
 		return err
