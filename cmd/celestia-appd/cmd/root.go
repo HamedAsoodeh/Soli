@@ -134,6 +134,7 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig encoding.Config) {
 		tmcmds.RollbackStateCmd,
 		debugCmd,
 		config.Cmd(),
+		migrateCmd(),
 	)
 
 	server.AddCommands(rootCmd, app.DefaultNodeHome, NewAppServer, createAppAndExport, addModuleInitFlags)

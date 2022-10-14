@@ -30,6 +30,7 @@ func (app *App) ExportAppStateAndValidators(
 	}
 
 	genState := app.mm.ExportGenesis(ctx, app.appCodec)
+
 	appState, err := json.MarshalIndent(genState, "", "  ")
 	if err != nil {
 		return servertypes.ExportedApp{}, err
