@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/celestiaorg/celestia-app/app/encoding"
@@ -16,10 +17,10 @@ import (
 	"github.com/tendermint/tendermint/types"
 )
 
-func MigrateGenesisStatev070(path string) error {
+func MigrateGenesisStatev070(oldGenPath, newGenPath string) error {
 	encCfg := encoding.MakeConfig(ModuleEncodingRegisters...)
 
-	doc, err := types.GenesisDocFromFile(path)
+	doc, err := types.GenesisDocFromFile(oldGenPath)
 	if err != nil {
 		return err
 	}
@@ -44,8 +45,16 @@ func MigrateGenesisStatev070(path string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(string(sdk.MustSortJSON(encoded)))
-	return nil
+
+	f, err := os.OpenFile(newGenPath, os.O_RDWR, os.ModePerm)
+	if err != nil {
+		return err
+	}
+
+	g := string(sdk.MustSortJSON(encoded))
+	defer f.Close()
+	fmt.Println(g)
+	return json.NewEncoder(f).Encode(g)
 }
 
 func qgbGenState(codec codec.Codec) json.RawMessage {
