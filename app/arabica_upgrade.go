@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"github.com/celestiaorg/celestia-app/app/encoding"
@@ -63,15 +62,16 @@ func MigrateGenesisStatev070(oldGenPath, newGenPath string) error {
 		return err
 	}
 
-	f, err := os.OpenFile(newGenPath, os.O_RDWR, os.ModePerm)
-	if err != nil {
-		return err
-	}
+	// f, err := os.OpenFile(newGenPath, os.O_RDWR, os.ModePerm)
+	// if err != nil {
+	// 	return err
+	// }
 
 	g := string(sdk.MustSortJSON(encoded))
-	defer f.Close()
+	// defer f.Close()
 	fmt.Println(g)
-	return json.NewEncoder(f).Encode(g)
+
+	return nil
 }
 
 func qgbGenState(codec codec.Codec) json.RawMessage {
@@ -153,6 +153,6 @@ type Validator struct {
 	Tokens            string    `json:"tokens"`
 	UnbondingHeight   string    `json:"unbonding_height"`
 	UnbondingTime     time.Time `json:"unbonding_time"`
-	Orchestrator      string    `json:"Orchestrator"`
-	EthAddress        string    `json:"EthAddress"`
+	Orchestrator      string    `json:"orchestrator"`
+	EthAddress        string    `json:"eth_address"`
 }
