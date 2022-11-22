@@ -3,6 +3,7 @@ package testnode
 import (
 	"context"
 	"strings"
+	"time"
 
 	srvconfig "github.com/cosmos/cosmos-sdk/server/config"
 	srvgrpc "github.com/cosmos/cosmos-sdk/server/grpc"
@@ -38,6 +39,7 @@ func StartNode(tmNode *node.Node, cctx Context) (Context, func() error, error) {
 			return err
 		}
 		tmNode.Wait()
+		time.Sleep(1 * time.Second)
 		return nil
 	}
 
